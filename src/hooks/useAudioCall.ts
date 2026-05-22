@@ -141,7 +141,7 @@ export function useAudioCall({
         const entry = vadContextsRef.current.get(uid)
         if (!entry) return
 
-        entry.analyser.getByteFrequencyData(entry.data)
+        (entry.analyser as any).getByteFrequencyData(entry.data)
         const sum = entry.data.reduce((a, b) => a + b, 0)
         const rms = sum / entry.data.length / 256 // 归一化到 0~1
 
