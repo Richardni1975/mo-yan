@@ -300,6 +300,11 @@ ${voting.votes.map(vote => {
         height: isMobile ? 36 : 44,
       }}>
         {/* Logo + 房间号 + 复制 */}
+        <button className="btn btn-sm mobile-only"
+          onClick={handleExit}
+          style={{ fontSize: '0.65rem', padding: '2px 6px', color: 'var(--paper-white)', background: 'var(--vermilion)', border: '1px solid var(--vermilion-dark)' }}>
+          退出
+        </button>
         <h2 style={{ fontFamily: 'var(--font-title)', fontSize: isMobile ? '0.9rem' : '1.05rem', letterSpacing: '0.15em', cursor: 'pointer', flexShrink: 0 }}
           onClick={() => navigate('/')}>墨言</h2>
         <span style={{ fontSize: '0.7rem', color: 'var(--ink-light)', fontFamily: 'monospace' }}>{effectiveRoomId}</span>
@@ -402,11 +407,6 @@ ${voting.votes.map(vote => {
             onClick={() => setShowVote(!showVote)}
             style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
             投票
-          </button>
-          <button className="btn btn-sm"
-            onClick={handleExit}
-            style={{ fontSize: '0.65rem', padding: '2px 8px', color: 'var(--paper-white)', background: 'var(--vermilion)', border: '1px solid var(--vermilion-dark)' }}>
-            退出
           </button>
         </div>
 
