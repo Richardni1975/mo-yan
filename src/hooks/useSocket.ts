@@ -25,8 +25,17 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
   const onParticipantsChangeRef = useRef(onParticipantsChange)
   onParticipantsChangeRef.current = onParticipantsChange
 
+  const MAX_RECONNECT = 10
+
   const joinRoom = useCallback(() => {
     if (!mountedRef.current) return
+
+    // 超过最大重连次数后不再尝试
+    if (joinAttemptRef.current > MAX_RECONNECT) {
+      console.error('[墨言] 已达到最大重连次数 (' + MAX_RECONNECT + '), 放弃连接')
+      setConnectionState('disconnected')
+      return
+    }
 
     // 清理旧 channel
     if (channelRef.current) {
@@ -40,6 +49,7 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
 
     setConnectionState('connecting')
     joinAttemptRef.current++
+    console.log('[墨言] 正在连接房间, 尝试次数:', joinAttemptRef.current)
 
     const channelName = `${CHANNEL_PREFIX}${roomId}`
     const channel = supabase.channel(channelName, {
@@ -79,6 +89,9 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
 
       if (status === 'SUBSCRIBED') {
         setConnectionState('connected')
+        // 连接成功，重置重连尝试计数
+        joinAttemptRef.current = 0
+        console.log('[墨言] 房间连接成功')
         // 加入时发送一次在线状态即可，Supabase 自动维护心跳
         channel.track({
           user_id: userId,
@@ -88,6 +101,7 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
         }).catch(() => {})
       } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED' || status === 'TIMED_OUT') {
         setConnectionState('disconnected')
+        console.warn('[墨言] 连接断开，准备重连')
         // 指数退避重连
         const attempt = joinAttemptRef.current
         const delay = Math.min(1000 * Math.pow(2, attempt), 30000) * (0.8 + Math.random() * 0.4)
@@ -111,6 +125,8 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
       channelRef.current = null
     }
     setConnectionState('disconnected')
+    // 重置重连计数，以便下次进入房间能正常重连
+    joinAttemptRef.current = 0
   }, [])
 
   const broadcast = useCallback((message: RoomMessage) => {

@@ -499,8 +499,13 @@ ${voting.votes.map(vote => {
                   <div className="panel-header" style={{ padding: '4px 8px', fontSize: '0.72rem' }}>
                     <span>视频 {videoCall.videoUsers.length}/{videoCall.remoteStreams.size + 1}</span>
                   </div>
-                  <VideoGrid localStream={videoCall.localStream} remoteStreams={videoCall.remoteStreams}
-                    videoUsers={videoCall.videoUsers} currentUserId={userId} participants={participants} />
+                  <MobileVideoGrid
+                    localStream={videoCall.localStream}
+                    remoteStreams={videoCall.remoteStreams}
+                    videoUsers={videoCall.videoUsers}
+                    currentUserId={userId}
+                    participants={participants}
+                  />
                 </div>
               )}
             </div>
@@ -644,4 +649,90 @@ function downloadFile(content: string, mime: string, filename: string) {
   a.href = url; a.download = filename
   document.body.appendChild(a); a.click()
   document.body.removeChild(a); URL.revokeObjectURL(url)
+}
+
+/**
+ * 针对移动端的视频网格组件
+ * - 强制加上了 playsInline、muted、autoPlay 属性，解决 iOS Safari / 微信内置浏览器黑屏问题
+ * - 手动调用 play() 以绕过自动播放策略
+ */
+function MobileVideoGrid({
+  localStream,
+  remoteStreams,
+  videoUsers,
+  currentUserId,
+  participants,
+}: {
+  localStream: MediaStream | null
+  remoteStreams: Map<string, MediaStream>
+  videoUsers: Array<{ id: string; startedAt: number }>
+  currentUserId: string
+  participants: Array<{ id: string; name: string }>
+}) {
+  const getName = (id: string) => participants.find((p) => p.id === id)?.name ?? '未知'
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 4,
+        padding: 4,
+        background: '#000',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      {/* 本地视频 */}
+      {localStream && (
+        <video
+          autoPlay
+          playsInline
+          muted
+          ref={(el) => {
+            if (el) {
+              el.srcObject = localStream
+              el.play().catch(() => {
+                // 自动播放被拒绝，静默处理
+              })
+            }
+          }}
+          style={{ width: '45%', maxHeight: 150, objectFit: 'cover' }}
+        />
+      )}
+
+      {/* 远程视频 */}
+      {Array.from(remoteStreams.entries()).map(([id, stream]) => (
+        <video
+          key={id}
+          autoPlay
+          playsInline
+          ref={(el) => {
+            if (el) {
+              el.srcObject = stream
+              el.play().catch(() => {
+                // 自动播放被拒绝，静默处理
+              })
+            }
+          }}
+          style={{ width: '45%', maxHeight: 150, objectFit: 'cover' }}
+        />
+      ))}
+
+      {/* 无视频占位 */}
+      {!localStream && remoteStreams.size === 0 && (
+        <span
+          style={{
+            color: '#fff',
+            fontSize: '0.7rem',
+            textAlign: 'center',
+            width: '100%',
+            padding: 8,
+          }}
+        >
+          等待视频启动…
+        </span>
+      )}
+    </div>
+  )
 }
