@@ -175,6 +175,14 @@ export function MeetingRoom() {
     return () => leaveRoom()
   }, [roomId, joinRoom, leaveRoom])
 
+  // ===== 加载诊断（帮助排查移动端访问问题） =====
+  useEffect(() => {
+    console.log('[墨言] 页面已加载。房间 ID:', roomId)
+    window.addEventListener('error', (e) => {
+      console.error('[墨言] 加载时未捕获错误:', e.error?.message ?? e.message)
+    })
+  }, [])
+
   // ===== 匿名模式 =====
   const toggleAnonymous = useCallback(() => {
     setIsAnonymous((prev) => {
