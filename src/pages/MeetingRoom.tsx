@@ -396,7 +396,7 @@ ${voting.votes.map(vote => {
             投票
           </button>
           <button className="btn btn-sm"
-            onClick={() => setShowExitConfirm(true)}
+            onClick={handleExit}
             style={{ fontSize: '0.65rem', padding: '2px 8px', color: 'var(--paper-white)', background: 'var(--vermilion)', border: '1px solid var(--vermilion-dark)' }}>
             退出
           </button>
