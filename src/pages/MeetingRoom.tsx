@@ -115,7 +115,7 @@ export function MeetingRoom() {
       } else if (msg.type === MESSAGE_TYPES.SYSTEM) {
         try {
           const data = JSON.parse(msg.content)
-          if (data._signal || data._shareStart || data._shareStop || data._shareMode) {
+          if (data._signal || data._shareStart || data._shareStop || data._shareMode || data._rejoin) {
             screenShare.handleMessage(msg)
           }
           if (data._videoStart || data._videoStop || data._videoSignal) {
