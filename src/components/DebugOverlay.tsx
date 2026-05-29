@@ -33,7 +33,7 @@ export function DebugOverlay() {
       <button
         onClick={() => setVisible(!visible)}
         style={{
-          position: 'fixed', bottom: 30, left: 10, zIndex: 99999,
+          position: 'fixed', top: '50%', left: 10, transform: 'translateY(-50%)', zIndex: 99999,
           width: 36, height: 36, borderRadius: 8,
           background: visible ? 'rgba(239,68,68,0.9)' : 'rgba(0,0,0,0.7)',
           color: '#fff', border: 'none', cursor: 'pointer',
@@ -48,7 +48,7 @@ export function DebugOverlay() {
       {visible && (
         <div
           style={{
-            position: 'fixed', bottom: 72, left: 10, zIndex: 99999,
+            position: 'fixed', top: 'calc(50% + 40px)', left: 10, zIndex: 99999,
             width: 'calc(100vw - 24px)', maxWidth: 520, maxHeight: '50vh',
             overflowY: 'auto',
             background: 'rgba(0,0,0,0.88)', color: '#0f0',
