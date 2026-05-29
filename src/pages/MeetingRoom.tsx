@@ -37,6 +37,7 @@ export function MeetingRoom() {
   const exportRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [showVote, setShowVote] = useState(false)
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
 
   // 移动端检测
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
@@ -183,6 +184,19 @@ export function MeetingRoom() {
     })
   }, [])
 
+  // ===== 退出房间（含程序退出） =====
+  const handleExit = useCallback(() => {
+    leaveRoom()
+    setShowExitConfirm(false)
+    navigate('/')
+    // 如果是在 PWA/独立窗口中打开，尝试关闭窗口
+    try {
+      if ((window.navigator as { standalone?: boolean }).standalone || window.matchMedia('(display-mode: standalone)').matches) {
+        window.close()
+      }
+    } catch { /* 静默处理 */ }
+  }, [leaveRoom, navigate])
+
   // ===== 发送消息 =====
   const handleSendMessage = useCallback((content: string) => {
     chat.sendMessage(content, isAnonymous)
@@ -316,6 +330,11 @@ ${voting.votes.map(vote => {
             style={{ fontSize: '0.75rem', padding: '3px 10px' }}>
             {isAnonymous ? '🙈 匿名' : '👤 实名'}
           </button>
+          <button className="btn btn-sm"
+            onClick={() => { leaveRoom(); navigate('/') }}
+            style={{ fontSize: '0.75rem', padding: '3px 10px', color: 'var(--paper-white)', background: 'var(--vermilion)', border: '1px solid var(--vermilion-dark)' }}>
+            退出
+          </button>
 
           <div ref={exportRef} style={{ position: 'relative' }}>
             <button className="btn btn-sm btn-secondary" onClick={() => setShowExport(!showExport)}
@@ -375,6 +394,11 @@ ${voting.votes.map(vote => {
             onClick={() => setShowVote(!showVote)}
             style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
             投票
+          </button>
+          <button className="btn btn-sm"
+            onClick={() => setShowExitConfirm(true)}
+            style={{ fontSize: '0.65rem', padding: '2px 8px', color: 'var(--paper-white)', background: 'var(--vermilion)', border: '1px solid var(--vermilion-dark)' }}>
+            退出
           </button>
         </div>
 
@@ -487,6 +511,23 @@ ${voting.votes.map(vote => {
                 onEndVote={voting.endVote} isAnonymous={isAnonymous} />
             </div>
           )}
+
+          {/* 移动端底部退出按钮条 */}
+          <div className="mobile-only" style={{
+            flexShrink: 0, padding: '8px 4px', borderTop: '1px solid var(--border-color)',
+            background: 'var(--paper-white)',
+          }}>
+            <button className="btn"
+              onClick={() => setShowExitConfirm(true)}
+              style={{
+                width: '100%', padding: '10px 20px', fontSize: '0.85rem',
+                color: 'var(--paper-white)', background: 'var(--vermilion)',
+                border: '1px solid var(--vermilion-dark)', borderRadius: 'var(--radius-md)',
+                letterSpacing: '0.1em',
+              }}>
+              退出房间
+            </button>
+          </div>
         </div>
       ) : (
         /* ----- 桌面端：水平布局 ----- */
@@ -544,6 +585,40 @@ ${voting.votes.map(vote => {
           </div>
         </div>
       )}
+      {/* ===== 退出确认弹窗 ===== */}
+      {showExitConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.45)',
+        }} onClick={() => setShowExitConfirm(false)}>
+          <div className="panel" style={{
+            width: isMobile ? '85vw' : 340, maxWidth: 360,
+            margin: 0, textAlign: 'center',
+          }} onClick={e => e.stopPropagation()}>
+            <div className="panel-body" style={{ padding: isMobile ? 28 : 32 }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🍂</div>
+              <h3 style={{ fontFamily: 'var(--font-title)', marginBottom: 8, fontSize: '1.1rem' }}>
+                确认退出房间？
+              </h3>
+              <p style={{ color: 'var(--ink-medium)', fontSize: '0.85rem', marginBottom: 24, lineHeight: 1.6 }}>
+                退出后将断开与房间的连接，<br/>如需再次加入请重新输入房间号。
+              </p>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button className="btn btn-secondary" onClick={() => setShowExitConfirm(false)}
+                  style={{ flex: 1, padding: '10px 0', fontSize: '0.85rem' }}>
+                  取消
+                </button>
+                <button className="btn btn-primary" onClick={handleExit}
+                  style={{ flex: 1, padding: '10px 0', fontSize: '0.85rem' }}>
+                  确认退出
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AudioRenderer streams={audioCall.remoteStreams} />
       <DebugOverlay />
     </div>
