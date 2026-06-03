@@ -24,8 +24,13 @@ export function MeetingRoom() {
   const { roomId } = useParams<{ roomId: string }>()
   const location = useLocation()
   const navigate = useNavigate()
+  // 优先使用真实姓名，如果没有则使用昵称
   const [nickname] = useState(() => {
-    return (location.state as { nickname?: string })?.nickname ?? localStorage.getItem(STORAGE_KEYS.NICKNAME) ?? '用户'
+    const state = location.state as { nickname?: string; realName?: string } | null
+    const realName = state?.realName ?? localStorage.getItem(STORAGE_KEYS.REAL_NAME) ?? ''
+    const nick = state?.nickname ?? localStorage.getItem(STORAGE_KEYS.NICKNAME) ?? '用户'
+    // 如果有真实姓名就显示真实姓名，否则显示昵称
+    return realName || nick
   })
   const [userId] = useState(() => generateId())
   const [isAnonymous, setIsAnonymous] = useState(() => {
@@ -143,21 +148,50 @@ export function MeetingRoom() {
     }
   }, [screenShare.sharerId, participants])
 
-  // ===== 重新连接后恢复共享观看 =====
+  // ===== 重新连接后恢复共享观看（带重试机制） =====
   useEffect(() => {
     if (screenShare.sharerId) return // 已连接共享者，无需恢复
     const activeSharer = participants.find((p) => p.isSharing && p.id !== userId)
     if (!activeSharer) return
-    // 广播重新加入通知：共享者重建出站 peer，自己重建 viewer peer
-    broadcast({
-      id: generateId(),
-      type: MESSAGE_TYPES.SYSTEM,
-      senderId: userId,
-      senderName: '',
-      timestamp: Date.now(),
-      content: JSON.stringify({ _rejoin: { sharerId: activeSharer.id } }),
-    })
-  }, [participants, userId, screenShare, broadcast])
+
+    const sharerId = activeSharer.id
+    let retryCount = 0
+    const MAX_RETRIES = 5
+    let timers: ReturnType<typeof setTimeout>[] = []
+
+    const sendRejoin = () => {
+      if (screenShare.sharerId) {
+        // 已成功连接，停止重试
+        timers.forEach(clearTimeout)
+        return
+      }
+      console.log(`[Rejoin] 发送 rejoin (sharer=${sharerId}) 尝试 #${retryCount + 1}`)
+      broadcast({
+        id: generateId(),
+        type: MESSAGE_TYPES.SYSTEM,
+        senderId: userId,
+        senderName: '',
+        timestamp: Date.now(),
+        content: JSON.stringify({ _rejoin: { sharerId: sharerId } }),
+      })
+      retryCount++
+      if (retryCount < MAX_RETRIES) {
+        // 指数退避：1s, 2s, 4s, 8s, 16s... 最大间隔 16s
+        const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 16000)
+        const timer = setTimeout(sendRejoin, delay)
+        timers.push(timer)
+      }
+    }
+
+    // 首次发送：先等 500ms 确保 socket 就绪
+    const initialTimer = setTimeout(sendRejoin, 500)
+    timers.push(initialTimer)
+
+    return () => {
+      timers.forEach(clearTimeout)
+    }
+  }, [participants, userId, screenShare.sharerId, screenShare.shareMode, broadcast])
+
 
   // ===== 共享状态同步到在线状态 =====
   useEffect(() => {
@@ -177,9 +211,9 @@ export function MeetingRoom() {
 
   // ===== 加载诊断（帮助排查移动端访问问题） =====
   useEffect(() => {
-    console.log('[墨言] 页面已加载。房间 ID:', roomId)
+    console.log('[默言无声] 页面已加载。房间 ID:', roomId)
     window.addEventListener('error', (e) => {
-      console.error('[墨言] 加载时未捕获错误:', e.error?.message ?? e.message)
+      console.error('[默言无声] 加载时未捕获错误:', e.error?.message ?? e.message)
     })
   }, [])
 
@@ -241,19 +275,19 @@ export function MeetingRoom() {
   const doExportChat = useCallback(() => {
     if (chat.messages.length === 0) { alert('暂无聊天记录'); return }
     const time = formatDateTime(new Date())
-    const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>墨言 - 聊天记录</title></head><body>
-<h1>墨言 - 聊天记录</h1><p>导出时间：${time}</p><hr/>
+    const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>默言无声 - 聊天记录</title></head><body>
+<h1>默言无声 - 聊天记录</h1><p>导出时间：${time}</p><hr/>
 ${chat.messages.map(m => `<div style="margin:8px 0"><strong>${m.senderName}</strong> <span style="color:#999;font-size:12px">${formatDateTime(new Date(m.timestamp))}</span><p>${escapeHtml(m.content)}</p></div>`).join('')}
 </body></html>`
-    downloadFile(html, 'text/html', `墨言_聊天记录.html`)
+    downloadFile(html, 'text/html', `默言无声_聊天记录.html`)
     setShowExport(false)
   }, [chat.messages])
 
   const doExportVotes = useCallback(() => {
     if (voting.votes.length === 0) { alert('暂无投票记录'); return }
     const time = formatDateTime(new Date())
-    const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>墨言 - 投票结果</title></head><body>
-<h1>墨言 - 投票结果</h1><p>导出时间：${time}</p><hr/>
+    const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>默言无声 - 投票结果</title></head><body>
+<h1>默言无声 - 投票结果</h1><p>导出时间：${time}</p><hr/>
 ${voting.votes.map(vote => {
   const vr = voting.results[vote.id] ?? []
   const total = vr.reduce((s, r) => s + r.count, 0)
@@ -261,7 +295,7 @@ ${voting.votes.map(vote => {
   return `<div style="margin:16px 0"><h2>${vote.title}</h2><p>模式：${modeLabel} | 总票数：${total}</p><ul>${vr.map(r => { const opt = vote.options.find(o => o.id === r.optionId); return `<li>${opt?.label ?? '?'}：${r.count} 票${r.voters ? `（${r.voters.join('、')}）` : ''}</li>` }).join('')}</ul></div>`
 }).join('')}
 </body></html>`
-    downloadFile(html, 'text/html', `墨言_投票结果.html`)
+    downloadFile(html, 'text/html', `默言无声_投票结果.html`)
     setShowExport(false)
   }, [voting.votes, voting.results])
 
@@ -306,11 +340,11 @@ ${voting.votes.map(vote => {
           退出
         </button>
         <h2 style={{ fontFamily: 'var(--font-title)', fontSize: isMobile ? '0.9rem' : '1.05rem', letterSpacing: '0.15em', cursor: 'pointer', flexShrink: 0 }}
-          onClick={() => navigate('/')}>墨言</h2>
+          onClick={() => navigate('/')}>默言无声</h2>
         <span style={{ fontSize: '0.7rem', color: 'var(--ink-light)', fontFamily: 'monospace' }}>{effectiveRoomId}</span>
         <button className="btn btn-sm btn-ghost" onClick={handleCopyLink}
           style={{ fontSize: '0.6rem', padding: '1px 4px', color: copied ? 'var(--bamboo-green)' : 'var(--ink-light)', flexShrink: 0 }}>
-          {copied ? '已复制' : '复制'}
+          {copied ? '已复制' : '复制会议地址'}
         </button>
 
         <span className="desktop-only" style={{ fontSize: '0.7rem', color: 'var(--ink-medium)', opacity: 0.4 }}>|</span>
@@ -525,22 +559,6 @@ ${voting.votes.map(vote => {
             </div>
           )}
 
-          {/* 移动端底部退出按钮条 */}
-          <div className="mobile-only" style={{
-            flexShrink: 0, padding: '8px 4px', borderTop: '1px solid var(--border-color)',
-            background: 'var(--paper-white)',
-          }}>
-            <button className="btn"
-              onClick={() => setShowExitConfirm(true)}
-              style={{
-                width: '100%', padding: '10px 20px', fontSize: '0.85rem',
-                color: 'var(--paper-white)', background: 'var(--vermilion)',
-                border: '1px solid var(--vermilion-dark)', borderRadius: 'var(--radius-md)',
-                letterSpacing: '0.1em',
-              }}>
-              退出房间
-            </button>
-          </div>
         </div>
       ) : (
         /* ----- 桌面端：水平布局 ----- */
@@ -632,14 +650,24 @@ ${voting.votes.map(vote => {
         </div>
       )}
 
-      <AudioRenderer streams={audioCall.remoteStreams} />
+      <AudioRenderer streams={(() => {
+        // 合并音频流：优先使用纯音频流，补充视频通话中的音频轨道
+        // 避免同一用户的音频被双重播放（视频流和音频流来自同一麦克风）
+        const allAudioStreams = new Map(audioCall.remoteStreams)
+        videoCall.remoteStreams.forEach((stream, uid) => {
+          if (!allAudioStreams.has(uid)) {
+            allAudioStreams.set(uid, stream)
+          }
+        })
+        return allAudioStreams
+      })()} />
       <DebugOverlay />
     </div>
   )
 }
 
 function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return text.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"')
 }
 
 function downloadFile(content: string, mime: string, filename: string) {

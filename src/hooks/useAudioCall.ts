@@ -463,8 +463,12 @@ export function useAudioCall({
           syncAudioUsers([...audioUsersRef.current, newUser])
         }
 
-        // 如果有音频在开启，给对方创建出站 peer
-        if (isEnabled && localStreamRef.current && !outboundPeersRef.current.has(remoteId)) {
+        // 如果有音频在开启，给对方创建出站 peer（避免重复：已有出站或已连接的入站则跳过）
+        const existingOut = outboundPeersRef.current.get(remoteId)
+        if (isEnabled && localStreamRef.current && !existingOut) {
+          createOutboundPeer(remoteId)
+        } else if (existingOut?.destroyed) {
+          outboundPeersRef.current.delete(remoteId)
           createOutboundPeer(remoteId)
         }
       } else if (data._audioStop) {
@@ -504,8 +508,24 @@ export function useAudioCall({
         const { targetId, signal } = data._audioSignal
         if (targetId === userId) {
           if (signal.type === 'offer') {
-            if (!inboundPeersRef.current.has(msg.senderId)) {
-              createInboundPeer(msg.senderId)
+            // 防止信令竞态条件：已有 connected 的 inbound peer 则跳过重复 offer
+            const existingInbound = inboundPeersRef.current.get(msg.senderId)
+            if (existingInbound) {
+              if (existingInbound.connected) {
+                console.log(`[audio] skip duplicate offer from ${msg.senderId}, inbound already connected`)
+                return
+              }
+              if (existingInbound.destroyed) {
+                console.log(`[audio] inbound from ${msg.senderId} was destroyed, recreating`)
+                inboundPeersRef.current.delete(msg.senderId)
+                removeRemoteStream(msg.senderId)
+                stopVAD(msg.senderId)
+                createInboundPeer(msg.senderId)
+              }
+            } else {
+              if (!inboundPeersRef.current.has(msg.senderId)) {
+                createInboundPeer(msg.senderId)
+              }
             }
             try {
               inboundPeersRef.current.get(msg.senderId)?.signal(signal)

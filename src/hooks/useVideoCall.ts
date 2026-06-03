@@ -210,7 +210,7 @@ export function useVideoCall({
           frameRate: { ideal: VIDEO_CAMERA_FPS },
           facingMode: 'user',
         } as MediaTrackConstraints,
-        audio: false,
+        audio: true,
       })
 
       localStreamRef.current = stream
@@ -345,7 +345,21 @@ export function useVideoCall({
         if (targetId === userId) {
           console.log(`[video] signal from=${msg.senderId} type=${signal.type} hasLocal=!!${!!localStreamRef.current} hasInbound=${inboundPeersRef.current.has(msg.senderId)} hasOutbound=${outboundPeersRef.current.has(msg.senderId)}`)
           if (signal.type === 'offer') {
-            if (!inboundPeersRef.current.has(msg.senderId)) {
+            // 关键：防止信令竞态条件导致已有 peer 被销毁
+            // 如果已有 connected 的 inbound peer，跳过重复 offer（避免 setRemoteDescription 状态冲突 → simple-peer 内部 destroy）
+            const existingInbound = inboundPeersRef.current.get(msg.senderId)
+            if (existingInbound) {
+              if (existingInbound.connected) {
+                console.log(`[video] skip duplicate offer from ${msg.senderId}, inbound already connected`)
+                return
+              }
+              if (existingInbound.destroyed) {
+                console.log(`[video] inbound from ${msg.senderId} was destroyed, recreating`)
+                inboundPeersRef.current.delete(msg.senderId)
+                removeRemoteStream(msg.senderId)
+                createInboundPeer(msg.senderId)
+              }
+            } else {
               createInboundPeer(msg.senderId)
             }
             console.log(`[WebRTC-Debug][inbound-${msg.senderId}] setRemoteDescription (processing offer from=${msg.senderId}) signalingState=${inboundPeersRef.current.get(msg.senderId)?._pc?.signalingState ?? '?'}`);

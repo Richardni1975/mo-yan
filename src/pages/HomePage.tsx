@@ -2,12 +2,20 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { generateRoomCode, isWeChatBrowser } from '../utils/helpers'
 import { STORAGE_KEYS } from '../utils/constants'
+import {
+  saveProfileLocally,
+  loadProfileLocally,
+  broadcastProfile,
+  listenForProfileUpdates,
+  isSupabaseConfigured,
+} from '../utils/supabase'
 
 export function HomePage() {
   const navigate = useNavigate()
-  const [nickname, setNickname] = useState('')
+  const [realName, setRealName] = useState('')
   const [joinCode, setJoinCode] = useState('')
   const [error, setError] = useState('')
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle')
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640)
 
   useEffect(() => {
@@ -16,33 +24,77 @@ export function HomePage() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  // 读取本地存储的昵称
+  // 读取本地存储的真实姓名
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEYS.NICKNAME)
-    if (saved) setNickname(saved)
+    const profile = loadProfileLocally()
+    if (profile.realName) setRealName(profile.realName)
   }, [])
 
+  // 监听其他设备同步过来的真实姓名
+  useEffect(() => {
+    const unsubscribe = listenForProfileUpdates((data) => {
+      // 如果广播的用户ID与当前设备相同，则更新本地
+      const localUserId = localStorage.getItem(STORAGE_KEYS.USER_ID)
+      if (data.userId !== localUserId) return
+      if (data.realName) {
+        setRealName(data.realName)
+        saveProfileLocally(data.nickname, data.realName)
+      }
+    })
+    return unsubscribe
+  }, [])
+
+  // 保存真实姓名并同步到云端
+  const handleSaveRealName = () => {
+    if (!realName.trim()) {
+      setError('请输入真实姓名')
+      return
+    }
+    setSyncStatus('syncing')
+    
+    // 保存本地（用真实姓名作为昵称，去掉重复输入）
+    saveProfileLocally(realName.trim(), realName.trim())
+    
+    // 广播到 Supabase（其他设备会收到同步）
+    if (isSupabaseConfigured()) {
+      broadcastProfile(realName.trim(), realName.trim())
+      setSyncStatus('synced')
+    } else {
+      setSyncStatus('synced')
+    }
+    
+    setTimeout(() => setSyncStatus('idle'), 2000)
+  }
+
   const handleCreate = () => {
-    if (!nickname.trim()) {
-      setError('请先输入昵称')
+    const name = realName.trim() || '用户'
+    if (!realName.trim()) {
+      setError('请输入姓名')
       return
     }
     const code = generateRoomCode()
-    localStorage.setItem(STORAGE_KEYS.NICKNAME, nickname.trim())
-    navigate(`/room/${code}`, { state: { nickname: nickname.trim() } })
+    // 保存姓名
+    saveProfileLocally(name, name)
+    navigate(`/room/${code}`, {
+      state: { nickname: name, realName: name },
+    })
   }
 
   const handleJoin = () => {
-    if (!nickname.trim()) {
-      setError('请先输入昵称')
+    const name = realName.trim() || '用户'
+    if (!realName.trim()) {
+      setError('请输入姓名')
       return
     }
     if (!joinCode.trim()) {
       setError('请输入房间号')
       return
     }
-    localStorage.setItem(STORAGE_KEYS.NICKNAME, nickname.trim())
-    navigate(`/room/${joinCode.trim().toUpperCase()}`, { state: { nickname: nickname.trim() } })
+    // 保存姓名
+    saveProfileLocally(name, name)
+    navigate(`/room/${joinCode.trim().toUpperCase()}`, {
+      state: { nickname: name, realName: name },
+    })
   }
 
   return (
@@ -85,7 +137,7 @@ export function HomePage() {
       )}
 
       {/* Logo 区域 */}
-      <div style={{ textAlign: 'center', marginBottom: isMobile ? 40 : 60, zIndex: 1 }}>
+      <div style={{ textAlign: 'center', marginBottom: isMobile ? 30 : 40, zIndex: 1 }}>
         <h1
           style={{
             fontFamily: 'var(--font-title)',
@@ -97,7 +149,7 @@ export function HomePage() {
             userSelect: 'none',
           }}
         >
-          墨言
+          默言无声
         </h1>
         <p style={{ color: 'var(--ink-medium)', fontSize: isMobile ? '0.85rem' : '1rem', letterSpacing: '0.1em' }}>
           多人实时沟通 · 屏幕共享 · 匿名讨论
@@ -112,7 +164,7 @@ export function HomePage() {
           maxWidth: 400,
           display: 'flex',
           flexDirection: 'column',
-          gap: 14,
+          gap: 12,
         }}
       >
         {/* 微信浏览器提示 */}
@@ -132,15 +184,36 @@ export function HomePage() {
           </div>
         )}
 
-        {/* 昵称 */}
-        <div>
-          <input
-            className="input-underline"
-            value={nickname}
-            onChange={(e) => { setNickname(e.target.value); setError('') }}
-            placeholder="输入你的昵称"
-            style={{ fontSize: isMobile ? '0.9rem' : '1rem', padding: '10px 4px', textAlign: 'center' }}
-          />
+        {/* 真实姓名 */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <div style={{ flex: 1 }}>
+            <input
+              className="input-underline"
+              value={realName}
+              onChange={(e) => { setRealName(e.target.value); setError('') }}
+              placeholder="输入真实姓名（登录后显示为此名）"
+              style={{ fontSize: isMobile ? '0.9rem' : '1rem', padding: '10px 4px', textAlign: 'center' }}
+            />
+          </div>
+          <button
+            className="btn btn-sm"
+            onClick={handleSaveRealName}
+            disabled={syncStatus === 'syncing'}
+            style={{
+              flexShrink: 0,
+              padding: isMobile ? '6px 10px' : '6px 14px',
+              fontSize: '0.75rem',
+              color: syncStatus === 'synced' ? 'var(--bamboo-green)' : 'var(--ink-blue)',
+              border: '1px solid',
+              borderColor: syncStatus === 'synced' ? 'var(--bamboo-green)' : 'var(--ink-blue)',
+              background: syncStatus === 'synced' ? 'rgba(143,188,143,0.1)' : 'transparent',
+              borderRadius: 'var(--radius-sm)',
+            }}
+          >
+            {syncStatus === 'syncing' ? '⏳ 同步中...' :
+             syncStatus === 'synced' ? '✓ 已同步' :
+             syncStatus === 'error' ? '✗ 同步失败' : '保存'}
+          </button>
         </div>
 
         {/* 创建房间 */}
@@ -194,7 +267,7 @@ export function HomePage() {
           fontFamily: 'var(--font-title)',
         }}
       >
-        墨言 · 以墨会言
+        默言无声 · 静默而谈
       </div>
     </div>
   )

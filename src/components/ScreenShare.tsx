@@ -21,7 +21,6 @@ export function ScreenShare({
   return (
     <div className="panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div className="panel-header" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
-        <span>屏幕共享</span>
         {shareMode !== 'idle' && (
           <span style={{ fontSize: '0.7rem', color: 'var(--ink-light)' }}>
             {shareMode === 'webrtc' ? 'WebRTC' : '截图'} | {(uploadBps / 1_000_000).toFixed(1)} Mbps

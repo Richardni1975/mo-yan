@@ -5,8 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "vite build --sourcemap=false",
+    "preview": "vite preview",
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:pages": "node scripts/deploy.mjs --pages",
+    "deploy:worker": "node scripts/deploy.mjs --worker",
+    "deploy:quick": "node scripts/deploy.mjs --gen-worker && node scripts/deploy.mjs --worker --skip-build",
+    "build:deploy": "node scripts/deploy.mjs --yes",
+    "gen:worker": "node scripts/deploy.mjs --gen-worker"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

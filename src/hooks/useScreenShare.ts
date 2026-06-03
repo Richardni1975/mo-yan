@@ -605,10 +605,15 @@ export function useScreenShare({
       } else if (data._rejoin) {
         // Viewer 断线重连，通知共享者重建 peer
         const { sharerId: sid } = data._rejoin
-        if (sid === userId && currentModeRef.current === 'webrtc') {
-          // 我是共享者：为断线重连的 viewer 重建出站 peer
+        if (sid === userId && screenStreamRef.current) {
+          // 我是共享者：无论当前在 webrtc 还是 screenshot 模式，都为重连 viewer 重建出站 peer
           const rejoinerId = msg.senderId
-          if (rejoinerId !== userId && !peersRef.current.has(rejoinerId) && screenStreamRef.current) {
+          if (rejoinerId !== userId && !peersRef.current.has(rejoinerId)) {
+            if (currentModeRef.current === 'screenshot') {
+              // 截图模式：切换回 webrtc 以便为 viewer 提供实时画面
+              console.log(`[ScreenShare] screenshot mode → switching to webrtc for rejoining viewer ${rejoinerId}`)
+              switchToWebRTCMode()
+            }
             console.log(`[ScreenShare] re-creating sharer peer for rejoining viewer ${rejoinerId}`)
             createSharerPeer(rejoinerId)
           }
@@ -631,9 +636,14 @@ export function useScreenShare({
           // 这个 signal 是发给我的
           if (signal.type === 'offer') {
             // Sharer 发来的 offer
-            if (!viewerPeerRef.current) {
-              const sid = sharerIdRef.current
-              if (sid) createViewerPeer(sid)
+            // 如果 sharerIdRef 为空（新加入者未收到 _shareStart），用 msg.senderId 推断
+            const sharerFromOffer = sharerIdRef.current || msg.senderId
+            if (!viewerPeerRef.current && sharerFromOffer && sharerFromOffer !== userId) {
+              setSharerId(sharerFromOffer)
+              setShareMode('webrtc')
+              currentModeRef.current = 'webrtc'
+              sharerIdRef.current = sharerFromOffer
+              createViewerPeer(sharerFromOffer)
             }
             try {
               viewerPeerRef.current?.signal(signal)

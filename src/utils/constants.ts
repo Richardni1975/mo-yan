@@ -93,4 +93,7 @@ export const VOTE_MODES = {
 export const STORAGE_KEYS = {
   NICKNAME: 'mo_yan_nickname',
   ANONYMOUS: 'mo_yan_anonymous',
+  USER_ID: 'mo_yan_user_id',
+  REAL_NAME: 'mo_yan_real_name',
+  PROFILE_SYNCED: 'mo_yan_profile_synced',
 } as const

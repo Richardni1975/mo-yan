@@ -113,8 +113,13 @@ const VideoTile = memo(function VideoTile({ videoRef, stream, remoteId, remoteSt
       // local stream handled by parent's ref
       return
     }
-    if (elRef.current && remoteId && remoteStreams.has(remoteId)) {
-      elRef.current.srcObject = remoteStreams.get(remoteId)!
+    const el = elRef.current
+    if (el && remoteId && remoteStreams.has(remoteId)) {
+      el.srcObject = remoteStreams.get(remoteId)!
+      // 显式调用 play() 以确保音频在浏览器自动播放策略下也能正常播放
+      el.play().catch(() => {
+        // 自动播放被浏览器拒绝，静默处理（用户可能需要手动交互）
+      })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteId, remoteStreams.get(remoteId ?? '')])

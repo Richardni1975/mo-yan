@@ -2,3 +2,9 @@
 dist/
 .vite/
 *.local
+.aider*
+.env
+.env.cloudflare
+apikey.env
+
+
