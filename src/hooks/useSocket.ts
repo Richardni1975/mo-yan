@@ -18,6 +18,7 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mountedRef = useRef(true)
   const joinAttemptRef = useRef(0)
+  const reconnectingRef = useRef(false) // 防止 removeChannel 的 CLOSED 事件触发二次重连
 
   // 用 ref 保持回调引用稳定，避免父组件重新渲染导致 joinRoom 变化 → 反复重连
   const onMessageRef = useRef(onMessage)
@@ -34,8 +35,12 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
     if (joinAttemptRef.current > MAX_RECONNECT) {
       console.error('[墨言] 已达到最大重连次数 (' + MAX_RECONNECT + '), 放弃连接')
       setConnectionState('disconnected')
+      reconnectingRef.current = false
       return
     }
+
+    // 标记正在主动重连，防止 removeChannel 触发的 CLOSED 事件启动二次重连
+    reconnectingRef.current = true
 
     // 清理旧 channel
     if (channelRef.current) {
@@ -89,8 +94,9 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
 
       if (status === 'SUBSCRIBED') {
         setConnectionState('connected')
-        // 连接成功，重置重连尝试计数
+        // 连接成功，重置重连尝试计数和标记
         joinAttemptRef.current = 0
+        reconnectingRef.current = false
         console.log('[墨言] 房间连接成功')
         // 加入时发送一次在线状态即可，Supabase 自动维护心跳
         channel.track({
@@ -100,6 +106,11 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
           isSharing: false,
         }).catch(() => {})
       } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED' || status === 'TIMED_OUT') {
+        // 如果正在主动重连中（joinRoom 已清理旧通道），跳过 CLOSED 事件触发的二次重连
+        if (reconnectingRef.current) {
+          console.log('[墨言] 正在重连中，跳过旧通道的', status, '事件')
+          return
+        }
         setConnectionState('disconnected')
         console.warn('[墨言] 连接断开，准备重连')
         // 指数退避重连
@@ -116,6 +127,7 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
 
   const leaveRoom = useCallback(() => {
     mountedRef.current = false
+    reconnectingRef.current = false
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current)
       reconnectTimerRef.current = null
