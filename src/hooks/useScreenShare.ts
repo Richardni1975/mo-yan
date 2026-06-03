@@ -420,15 +420,28 @@ export function useScreenShare({
 
   const startShare = useCallback(async () => {
     try {
-      // 请求屏幕共享
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 15 },
-        } as MediaTrackConstraints,
-        audio: true,
-      })
+      // 请求屏幕共享（先尝试带系统音频，失败则回退到仅视频）
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 15 },
+          } as MediaTrackConstraints,
+          audio: true,
+        })
+      } catch (audioErr) {
+        console.warn('[ScreenShare] 系统音频不可用，回退到无音频模式:', audioErr)
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 15 },
+          } as MediaTrackConstraints,
+          audio: false,
+        })
+      }
 
       screenStreamRef.current = stream
       currentModeRef.current = 'webrtc'
@@ -617,6 +630,15 @@ export function useScreenShare({
             console.log(`[ScreenShare] re-creating sharer peer for rejoining viewer ${rejoinerId}`)
             createSharerPeer(rejoinerId)
           }
+          // 同步播 _shareStart 让 viewer 确认共享状态（信令丢失兜底）
+          broadcast({
+            id: generateId(),
+            type: MESSAGE_TYPES.SYSTEM,
+            senderId: userId,
+            senderName: '',
+            timestamp: Date.now(),
+            content: JSON.stringify({ _shareStart: { sharerId: userId } }),
+          })
         } else if (sid === sharerIdRef.current || !sharerIdRef.current) {
           // 我是 viewer：重新初始化状态并创建 viewer peer
           if (sid !== userId) {

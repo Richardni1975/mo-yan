@@ -49,6 +49,12 @@ export function useVideoCall({
   const inboundPeersRef = useRef<Map<string, SimplePeer.Instance>>(new Map())
   const videoUsersRef = useRef<VideoUser[]>([])
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map())
+  const peerUserIdsRef = useRef<string[]>([])
+
+  // 保持 peerUserIds 引用最新，避免 startVideo / handleMessage 中的闭包过期
+  useEffect(() => {
+    peerUserIdsRef.current = peerUserIds
+  }, [peerUserIds])
 
   const syncVideoUsers = useCallback((users: VideoUser[]) => {
     videoUsersRef.current = users
@@ -229,7 +235,7 @@ export function useVideoCall({
         content: JSON.stringify({ _videoStart: { userId, startedAt } }),
       })
 
-      console.log(`[video] startVideo: userId=${userId} videoUsers=[${videoUsersRef.current.map(u=>u.id).join(',')}] peerUserIds=[${peerUserIds.join(',')}]`)
+      console.log(`[video] startVideo: userId=${userId} videoUsers=[${videoUsersRef.current.map(u=>u.id).join(',')}] peerUserIds=[${peerUserIdsRef.current.join(',')}]`)
 
       // 把自己加入视频用户列表
       syncVideoUsers([...videoUsersRef.current, { id: userId, startedAt }])
@@ -239,7 +245,7 @@ export function useVideoCall({
         .sort((a, b) => a.startedAt - b.startedAt)
       const myIndex = sorted.findIndex((u) => u.id === userId)
       if (myIndex < VIDEO_MAX_PARTICIPANTS) {
-        peerUserIds.forEach((id) => {
+        peerUserIdsRef.current.forEach((id) => {
           if (id !== userId) createOutboundPeer(id)
         })
       }
@@ -247,7 +253,7 @@ export function useVideoCall({
       const msg = err instanceof Error ? err.message : '摄像头启动失败'
       onError?.(msg)
     }
-  }, [userId, broadcast, peerUserIds, createOutboundPeer, syncVideoUsers, onError])
+  }, [userId, broadcast, createOutboundPeer, syncVideoUsers, onError])
 
   const stopVideo = useCallback(() => {
     // 广播关闭
@@ -310,6 +316,16 @@ export function useVideoCall({
         if (!exists) {
           const newList = [...videoUsersRef.current, { id: remoteId, startedAt }]
           syncVideoUsers(newList)
+        }
+
+        // 主动创建 inbound peer 以接收对方的视频流（不等 offer 信号，避免竞态）
+        const existingInbound = inboundPeersRef.current.get(remoteId)
+        if (!existingInbound || existingInbound.destroyed) {
+          if (existingInbound?.destroyed) {
+            inboundPeersRef.current.delete(remoteId)
+            removeRemoteStream(remoteId)
+          }
+          createInboundPeer(remoteId)
         }
 
         // 如果我也有视频，并且对方有席位
