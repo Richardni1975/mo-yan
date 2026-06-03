@@ -1,15 +1,13 @@
-# Cloudflare Workers 配置
-# 由 自动部署脚本 生成 - 请勿手动修改此文件
+# Cloudflare Workers / Pages 配置
+# 由 自动部署脚本 生成
 
 name = "mo-yan"
 main = "worker.js"
 compatibility_date = "2025-02-01"
 compatibility_flags = ["nodejs_compat"]
 
-# 部署到自定义域（如果需要，取消注释并填写你的域）
-# routes = [
-#   { pattern = "your-domain.com", zone_name = "your-domain.com" }
-# ]
+# Pages 部署
+pages_build_output_dir = "dist"
 
 # Workers 计划
 # 免费计划: 100k 请求/天
