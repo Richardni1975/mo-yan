@@ -327,24 +327,32 @@ ${voting.votes.map(vote => {
     <div style={{ height: viewportHeight, display: 'flex', flexDirection: 'column', background: 'var(--paper-light)' }}>
       {/* ===== 顶部导航 ===== */}
       <header style={{
-        display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 12,
-        padding: isMobile ? '4px 8px' : '6px 16px',
+        display: 'flex', alignItems: 'center', gap: isMobile ? 3 : 12,
+        padding: isMobile ? '4px 4px' : '6px 16px',
         borderBottom: '1px solid var(--border-color)',
         background: 'var(--paper-white)', flexShrink: 0,
-        height: isMobile ? 36 : 44,
+        height: isMobile ? 38 : 44, overflow: 'hidden',
       }}>
         {/* Logo + 房间号 + 复制 */}
         <button className="btn btn-sm mobile-only"
           onClick={handleExit}
-          style={{ fontSize: '0.65rem', padding: '2px 6px', color: 'var(--paper-white)', background: 'var(--vermilion)', border: '1px solid var(--vermilion-dark)' }}>
-          退出
+          style={{
+            fontSize: '0.75rem', padding: '2px 5px', lineHeight: 1,
+            color: 'var(--ink-light)', background: 'transparent', border: 'none',
+            flexShrink: 0,
+          }}>
+          ✕
         </button>
-        <h2 style={{ fontFamily: 'var(--font-title)', fontSize: isMobile ? '0.9rem' : '1.05rem', letterSpacing: '0.15em', cursor: 'pointer', flexShrink: 0 }}
+        <h2 style={{ fontFamily: 'var(--font-title)', fontSize: isMobile ? '0.8rem' : '1.05rem', letterSpacing: '0.08em', cursor: 'pointer', flexShrink: 0 }}
           onClick={() => navigate('/')}>默言无声</h2>
-        <span style={{ fontSize: '0.7rem', color: 'var(--ink-light)', fontFamily: 'monospace' }}>{effectiveRoomId}</span>
+        <span style={{
+          fontSize: '0.65rem', color: 'var(--ink-light)', fontFamily: 'monospace',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          maxWidth: isMobile ? 56 : 'none',
+        }}>{effectiveRoomId}</span>
         <button className="btn btn-sm btn-ghost" onClick={handleCopyLink}
           style={{ fontSize: '0.6rem', padding: '1px 4px', color: copied ? 'var(--bamboo-green)' : 'var(--ink-light)', flexShrink: 0 }}>
-          {copied ? '已复制' : '复制会议地址'}
+          {copied ? '✓' : '📋'}
         </button>
 
         <span className="desktop-only" style={{ fontSize: '0.7rem', color: 'var(--ink-medium)', opacity: 0.4 }}>|</span>
@@ -414,34 +422,94 @@ ${voting.votes.map(vote => {
           </div>
         </div>
 
-        {/* 移动端：语音 + 摄像头 + 匿名 + 投票 */}
-        <div className="mobile-only" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button className={`btn btn-sm ${audioCall.isEnabled ? 'btn-primary' : 'btn-secondary'}`}
+        {/* 移动端按钮行：🎤 🎥 🙈 🗳️ 📤 */}
+        <div className="mobile-only" style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+          <button
             onClick={() => audioCall.isEnabled ? audioCall.toggleMute() : audioCall.startAudio()}
-            style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
+            style={{
+              fontSize: '0.85rem', padding: '2px 5px', lineHeight: 1, border: 'none',
+              background: audioCall.isEnabled ? 'var(--ink-blue)' : 'transparent',
+              color: audioCall.isEnabled ? '#fff' : 'var(--ink-medium)',
+              borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+            }}>
             {audioCall.isEnabled ? (audioCall.isMuted ? '🔇' : '🎤') : '🎤'}
           </button>
           {audioCall.isEnabled && (
-            <button className="btn btn-sm btn-ghost" onClick={audioCall.stopAudio}
-              style={{ fontSize: '0.55rem', padding: '2px 4px', color: 'var(--vermilion)' }}>
+            <button onClick={audioCall.stopAudio}
+              style={{
+                fontSize: '0.6rem', padding: '2px 3px', border: 'none',
+                background: 'transparent', color: 'var(--vermilion)',
+                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+              }}>
               挂断
             </button>
           )}
-          <button className={`btn btn-sm ${videoCall.isEnabled ? 'btn-primary' : 'btn-secondary'}`}
+          <button
             onClick={() => videoCall.isEnabled ? videoCall.stopVideo() : handleStartVideo()}
-            style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
-            {videoCall.isEnabled ? '🎥' : '🎥'}
+            style={{
+              fontSize: '0.85rem', padding: '2px 5px', lineHeight: 1, border: 'none',
+              background: videoCall.isEnabled ? 'var(--ink-blue)' : 'transparent',
+              color: videoCall.isEnabled ? '#fff' : 'var(--ink-medium)',
+              borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+            }}>
+            🎥
           </button>
-          <button className={`btn btn-sm ${isAnonymous ? 'btn-primary' : 'btn-secondary'}`}
+          <button
             onClick={toggleAnonymous}
-            style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
+            style={{
+              fontSize: '0.85rem', padding: '2px 5px', lineHeight: 1, border: 'none',
+              background: isAnonymous ? 'var(--ink-blue)' : 'transparent',
+              color: isAnonymous ? '#fff' : 'var(--ink-medium)',
+              borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+            }}>
             {isAnonymous ? '🙈' : '👤'}
           </button>
-          <button className="btn btn-sm btn-ghost"
+          <button
             onClick={() => setShowVote(!showVote)}
-            style={{ fontSize: '0.65rem', padding: '2px 6px' }}>
-            投票
+            style={{
+              fontSize: '0.85rem', padding: '2px 5px', lineHeight: 1, border: 'none',
+              background: showVote ? 'var(--ink-blue)' : 'transparent',
+              color: showVote ? '#fff' : 'var(--ink-medium)',
+              borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+            }}>
+            🗳️
           </button>
+          {/* 导出 */}
+          <div ref={exportRef} style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowExport(!showExport)}
+              style={{
+                fontSize: '0.85rem', padding: '2px 5px', lineHeight: 1, border: 'none',
+                background: showExport ? 'var(--ink-blue)' : 'transparent',
+                color: showExport ? '#fff' : 'var(--ink-medium)',
+                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+              }}>
+              📤
+            </button>
+            {showExport && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 100,
+                background: 'var(--paper-white)', border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)', boxShadow: '0 2px 8px var(--shadow-color)',
+                minWidth: 140, overflow: 'hidden',
+              }}>
+                <button onClick={doExportChat} style={{
+                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
+                  fontSize: '0.75rem', color: 'var(--ink-dark)', background: 'transparent', border: 'none',
+                  cursor: 'pointer',
+                }}>
+                  导出聊天记录
+                </button>
+                <button onClick={doExportVotes} style={{
+                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
+                  fontSize: '0.75rem', color: 'var(--ink-dark)', background: 'transparent', border: 'none',
+                  cursor: 'pointer',
+                }}>
+                  导出投票结果
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <ConnectionStatus state={connectionState} />

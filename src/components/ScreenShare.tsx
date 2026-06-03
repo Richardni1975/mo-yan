@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { ShareMode } from '../utils/types'
 import { isScreenShareSupported } from '../utils/helpers'
 
@@ -17,6 +18,22 @@ export function ScreenShare({
   isSharer, sharerName, onStartShare, onStopShare,
 }: Props) {
   const supported = isScreenShareSupported()
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  // 用 ref 直接更新 img src，避免 React 每帧重渲染导致画面闪烁
+  useEffect(() => {
+    if (imgRef.current && screenshotUrl) {
+      imgRef.current.src = screenshotUrl
+    }
+  }, [screenshotUrl])
+
+  // 用 ref 挂载远端 WebRTC 流
+  useEffect(() => {
+    if (videoRef.current && remoteStream) {
+      videoRef.current.srcObject = remoteStream
+    }
+  }, [remoteStream])
 
   return (
     <div className="panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -47,12 +64,11 @@ export function ScreenShare({
         overflow: 'hidden', position: 'relative',
       }}>
         {remoteStream ? (
-          <video autoPlay playsInline
-            ref={(el) => { if (el && remoteStream) el.srcObject = remoteStream }}
+          <video ref={videoRef} autoPlay playsInline
             style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         ) : screenshotUrl ? (
-          <img src={screenshotUrl} alt="共享屏幕"
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          <img ref={imgRef} src={screenshotUrl} alt="共享屏幕"
+            style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'auto' }} />
         ) : (
           <div style={{ textAlign: 'center', color: 'var(--ink-light)', fontSize: '0.8rem' }}>
             {sharerName ? `${sharerName} 正在共享屏幕` : '暂无共享'}
