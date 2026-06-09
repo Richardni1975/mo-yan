@@ -73,6 +73,7 @@ export function useScreenShare({
   const sharerIdRef = useRef<string | null>(null)
   const peerUserIdsRef = useRef<string[]>([])
   const degradeCountRef = useRef(0)
+  const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 保持 peerUserIds 引用最新
   const prevPeerIdsRef = useRef<string[]>([])
@@ -472,6 +473,22 @@ export function useScreenShare({
       // 为所有 viewer 创建 peer
       connectToAllViewers()
 
+      // 启动心跳广播：每 5 秒发一次 _shareStart，让后来加入的观众能发现共享
+      heartbeatTimerRef.current = setInterval(() => {
+        if (currentModeRef.current === 'idle') {
+          if (heartbeatTimerRef.current) { clearInterval(heartbeatTimerRef.current); heartbeatTimerRef.current = null }
+          return
+        }
+        broadcast({
+          id: generateId(),
+          type: MESSAGE_TYPES.SYSTEM,
+          senderId: userId,
+          senderName: '',
+          timestamp: Date.now(),
+          content: JSON.stringify({ _shareStart: { sharerId: userId } }),
+        })
+      }, 5000)
+
       // 启动带宽监控
       startBandwidthMonitoring()
     } catch (err) {
@@ -486,6 +503,11 @@ export function useScreenShare({
   }, [userId, broadcast, connectToAllViewers, initCapture, startBandwidthMonitoring, onError])
 
   const stopShare = useCallback(() => {
+    // 停止心跳
+    if (heartbeatTimerRef.current) {
+      clearInterval(heartbeatTimerRef.current)
+      heartbeatTimerRef.current = null
+    }
     // 停止捕获
     stopScreenshotCapture()
     cleanupCapture()
@@ -581,9 +603,16 @@ export function useScreenShare({
       const data = JSON.parse(msg.content)
 
       if (data._shareStart) {
-        // 有人开始共享
+        // 有人开始共享（或心跳）
         const sid = data._shareStart.sharerId
         if (sid === userId) return
+        // 如果已经连接到同一个共享者，只更新状态，不重建 peer
+        if (sharerIdRef.current === sid && viewerPeerRef.current && !viewerPeerRef.current.destroyed) {
+          setSharerId(sid)
+          setShareMode('webrtc')
+          currentModeRef.current = 'webrtc'
+          return
+        }
         setSharerId(sid)
         setShareMode('webrtc')
         currentModeRef.current = 'webrtc'
