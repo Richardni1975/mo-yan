@@ -50,11 +50,26 @@ export function useVideoCall({
   const videoUsersRef = useRef<VideoUser[]>([])
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map())
   const peerUserIdsRef = useRef<string[]>([])
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 保持 peerUserIds 引用最新，避免 startVideo / handleMessage 中的闭包过期
   useEffect(() => {
     peerUserIdsRef.current = peerUserIds
   }, [peerUserIds])
+
+  // 补齐遗漏的出站 peer（应对 presence 同步慢导致 startVideo 时 participant 列表不全）
+  const ensureOutboundPeers = useCallback(() => {
+    if (!localStreamRef.current) return
+    if (!hasVideoSlot()) return
+    peerUserIdsRef.current.forEach((id) => {
+      if (id === userId) return
+      const existing = outboundPeersRef.current.get(id)
+      if (!existing || existing.destroyed) {
+        if (existing?.destroyed) outboundPeersRef.current.delete(id)
+        createOutboundPeer(id)
+      }
+    })
+  }, [userId, hasVideoSlot, createOutboundPeer])
 
   const syncVideoUsers = useCallback((users: VideoUser[]) => {
     videoUsersRef.current = users
@@ -249,13 +264,31 @@ export function useVideoCall({
           if (id !== userId) createOutboundPeer(id)
         })
       }
+
+      // 延迟重试：应对 presence 同步慢导致参与者列表不全的场景
+      // 1.5s 和 4s 后各检查一次，补齐遗漏的出站 peer
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+      syncTimerRef.current = setTimeout(() => {
+        console.log('[video] delayed sync check: peerUserIds=', peerUserIdsRef.current.join(','))
+        ensureOutboundPeers()
+        syncTimerRef.current = setTimeout(() => {
+          console.log('[video] final sync check: peerUserIds=', peerUserIdsRef.current.join(','))
+          ensureOutboundPeers()
+          syncTimerRef.current = null
+        }, 2500)
+      }, 1500)
     } catch (err) {
       const msg = err instanceof Error ? err.message : '摄像头启动失败'
       onError?.(msg)
     }
-  }, [userId, broadcast, createOutboundPeer, syncVideoUsers, onError])
+  }, [userId, broadcast, createOutboundPeer, syncVideoUsers, onError, ensureOutboundPeers])
 
   const stopVideo = useCallback(() => {
+    // 清理延迟同步定时器
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current)
+      syncTimerRef.current = null
+    }
     // 广播关闭
     broadcast({
       id: generateId(),
