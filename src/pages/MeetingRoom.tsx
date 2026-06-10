@@ -39,7 +39,8 @@ export function MeetingRoom() {
   const [participants, setParticipants] = useState<Array<{ id: string; name: string; isSharing: boolean }>>([])
   const [sharerName, setSharerName] = useState<string | null>(null)
   const [showExport, setShowExport] = useState(false)
-  const exportRef = useRef<HTMLDivElement>(null)
+  const desktopExportRef = useRef<HTMLDivElement>(null)
+  const mobileExportRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [showVote, setShowVote] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
@@ -279,8 +280,8 @@ export function MeetingRoom() {
 <h1>默言无声 - 聊天记录</h1><p>导出时间：${time}</p><hr/>
 ${chat.messages.map(m => `<div style="margin:8px 0"><strong>${m.senderName}</strong> <span style="color:#999;font-size:12px">${formatDateTime(new Date(m.timestamp))}</span><p>${escapeHtml(m.content)}</p></div>`).join('')}
 </body></html>`
-    downloadFile(html, 'text/html', `默言无声_聊天记录.html`)
-    setShowExport(false)
+    const ok = downloadFile(html, 'text/html', `默言无声_聊天记录.html`)
+    if (ok) setShowExport(false)
   }, [chat.messages])
 
   const doExportVotes = useCallback(() => {
@@ -295,14 +296,17 @@ ${voting.votes.map(vote => {
   return `<div style="margin:16px 0"><h2>${vote.title}</h2><p>模式：${modeLabel} | 总票数：${total}</p><ul>${vr.map(r => { const opt = vote.options.find(o => o.id === r.optionId); return `<li>${opt?.label ?? '?'}：${r.count} 票${r.voters ? `（${r.voters.join('、')}）` : ''}</li>` }).join('')}</ul></div>`
 }).join('')}
 </body></html>`
-    downloadFile(html, 'text/html', `默言无声_投票结果.html`)
-    setShowExport(false)
+    const ok = downloadFile(html, 'text/html', `默言无声_投票结果.html`)
+    if (ok) setShowExport(false)
   }, [voting.votes, voting.results])
 
-  // 点击外部关闭导出菜单
+  // 点击外部关闭导出菜单（兼顾桌面端和移动端 ref）
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const insideDesktop = desktopExportRef.current?.contains(target)
+      const insideMobile = mobileExportRef.current?.contains(target)
+      if (!insideDesktop && !insideMobile) {
         setShowExport(false)
       }
     }
@@ -391,7 +395,7 @@ ${voting.votes.map(vote => {
             退出
           </button>
 
-          <div ref={exportRef} style={{ position: 'relative' }}>
+          <div ref={desktopExportRef} style={{ position: 'relative' }}>
             <button className="btn btn-sm btn-secondary" onClick={() => setShowExport(!showExport)}
               style={{ fontSize: '0.75rem', padding: '3px 10px' }}>
               导出
@@ -405,17 +409,15 @@ ${voting.votes.map(vote => {
               }}>
                 <button onClick={doExportChat} style={{
                   display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px',
-                  fontSize: '0.8rem', color: 'var(--ink-dark)', transition: 'background 0.15s',
-                }} onMouseEnter={e => (e.target as HTMLElement).style.background = 'var(--paper-dark)'}
-                  onMouseLeave={e => (e.target as HTMLElement).style.background = 'transparent'}>
-                  导出聊天记录 (HTML)
+                  fontSize: '0.8rem', color: 'var(--ink-dark)', border: 'none', background: 'transparent', cursor: 'pointer',
+                }}>
+                  导出聊天记录
                 </button>
                 <button onClick={doExportVotes} style={{
                   display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px',
-                  fontSize: '0.8rem', color: 'var(--ink-dark)',
-                }} onMouseEnter={e => (e.target as HTMLElement).style.background = 'var(--paper-dark)'}
-                  onMouseLeave={e => (e.target as HTMLElement).style.background = 'transparent'}>
-                  导出投票结果 (HTML)
+                  fontSize: '0.8rem', color: 'var(--ink-dark)', border: 'none', background: 'transparent', cursor: 'pointer',
+                }}>
+                  导出投票结果
                 </button>
               </div>
             )}
@@ -475,7 +477,7 @@ ${voting.votes.map(vote => {
             🗳️
           </button>
           {/* 导出 */}
-          <div ref={exportRef} style={{ position: 'relative' }}>
+          <div ref={mobileExportRef} style={{ position: 'relative' }}>
             <button
               onClick={() => setShowExport(!showExport)}
               style={{
@@ -738,25 +740,46 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"')
 }
 
-function downloadFile(content: string, mime: string, filename: string) {
+function downloadFile(content: string, mime: string, filename: string): boolean {
   try {
-    const blob = new Blob([content], { type: `${mime};charset=utf-8` })
-    const url = (window.URL || URL).createObjectURL(blob)
+    const blob = new Blob(['﻿' + content], { type: `${mime};charset=utf-8` })
+    const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = filename
     a.style.display = 'none'
     document.body.appendChild(a)
     a.click()
-    // 延迟回收 URL，确保浏览器有足够时间启动下载
+    // Toast 提示
+    showToast(`已下载: ${filename}`)
     setTimeout(() => {
       document.body.removeChild(a)
-      ;(window.URL || URL).revokeObjectURL(url)
-    }, 500)
+      URL.revokeObjectURL(url)
+    }, 800)
+    return true
   } catch (err) {
     console.error('[Export] 下载失败:', err)
     alert('下载失败，请重试')
+    return false
   }
+}
+
+// 简易 toast 提示
+function showToast(msg: string) {
+  const el = document.createElement('div')
+  el.textContent = msg
+  el.style.cssText = `
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:9999;
+    background:#2c5f6e; color:#fff; padding:8px 20px; border-radius:6px;
+    font-size:0.85rem; box-shadow:0 4px 12px rgba(0,0,0,0.25);
+    animation: toastIn 0.3s ease;
+  `
+  document.body.appendChild(el)
+  setTimeout(() => {
+    el.style.opacity = '0'
+    el.style.transition = 'opacity 0.3s'
+    setTimeout(() => document.body.removeChild(el), 300)
+  }, 2000)
 }
 
 /**
