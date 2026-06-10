@@ -93,6 +93,8 @@ export function MeetingRoom() {
     userName: nickname,
     broadcast,
     peerUserIds: participants.map((p) => p.id),
+    isVideoEnabled: videoCall.isEnabled,
+    videoStreamRef: videoCall.localStream,
     onError: (err) => alert(err),
   })
 

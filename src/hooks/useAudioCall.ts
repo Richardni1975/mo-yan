@@ -15,6 +15,7 @@ interface UseAudioCallOptions {
   userName: string
   broadcast: (msg: RoomMessage) => void
   peerUserIds: string[]
+  isVideoEnabled: boolean
   onError?: (error: string) => void
 }
 
@@ -75,6 +76,7 @@ export function useAudioCall({
   userName,
   broadcast,
   peerUserIds,
+  isVideoEnabled,
   onError,
 }: UseAudioCallOptions): UseAudioCallReturn {
   const [isEnabled, setIsEnabled] = useState(false)
@@ -298,27 +300,28 @@ export function useAudioCall({
 
   const startAudio = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        } as MediaTrackConstraints,
-        video: false,
-      })
+      // 如果视频已开启，视频流已携带音频，无需单独获取麦克风或创建 peer
+      if (!isVideoEnabled) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          } as MediaTrackConstraints,
+          video: false,
+        })
+        localStreamRef.current = stream
+        setLocalStream(stream)
+      }
 
-      localStreamRef.current = stream
-      setLocalStream(stream)
       setIsMuted(false)
       setIsEnabled(true)
 
       const startedAt = Date.now()
 
-      // 申请发言槽位
       slotManagerRef.current.enter(userId)
       syncSpeakerSlots(slotManagerRef.current.active())
 
-      // 广播开启语音
       broadcast({
         id: generateId(),
         type: MESSAGE_TYPES.SYSTEM,
@@ -330,22 +333,22 @@ export function useAudioCall({
         }),
       })
 
-      // 把自己加入音频用户列表
       const me: AudioUser = { id: userId, muted: false, speaking: false, startedAt }
       syncAudioUsers([...audioUsersRef.current, me])
 
-      // 给所有参与者创建出站 peer
-      peerUserIds.forEach((id) => {
-        if (id !== userId) createOutboundPeer(id)
-      })
+      // 仅当视频未开启时才创建独立音频 peer（视频 peer 已传输音频）
+      if (!isVideoEnabled) {
+        peerUserIds.forEach((id) => {
+          if (id !== userId) createOutboundPeer(id)
+        })
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '麦克风启动失败'
       onError?.(msg)
     }
-  }, [userId, broadcast, peerUserIds, createOutboundPeer, syncAudioUsers, syncSpeakerSlots, onError])
+  }, [userId, broadcast, peerUserIds, isVideoEnabled, createOutboundPeer, syncAudioUsers, syncSpeakerSlots, onError])
 
   const stopAudio = useCallback(() => {
-    // 广播关闭
     broadcast({
       id: generateId(),
       type: MESSAGE_TYPES.SYSTEM,
@@ -355,26 +358,25 @@ export function useAudioCall({
       content: JSON.stringify({ _audioStop: {} }),
     })
 
-    // 释放麦克风
-    if (localStreamRef.current) {
+    // 仅当视频未开启时才释放独立音频流
+    if (!isVideoEnabled && localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((t) => t.stop())
       localStreamRef.current = null
     }
-    setLocalStream(null)
+    if (!isVideoEnabled) setLocalStream(null)
 
-    // 释放发言槽位
     slotManagerRef.current.leave(userId)
     syncSpeakerSlots(slotManagerRef.current.active())
 
-    // 销毁所有 peer
-    destroyOutboundPeers()
-    destroyInboundPeers()
+    // 视频开启时不销毁 peer（由视频 hook 管理）
+    if (!isVideoEnabled) {
+      destroyOutboundPeers()
+      destroyInboundPeers()
+      remoteStreamsRef.current.forEach((_, uid) => removeRemoteStream(uid))
+      remoteStreamsRef.current.clear()
+    }
 
-    // 清除远端流
-    remoteStreamsRef.current.forEach((_, uid) => removeRemoteStream(uid))
-    remoteStreamsRef.current.clear()
-
-    // 停止所有 VAD
+    // 停止 VAD
     vadTimersRef.current.forEach((timer, uid) => {
       clearInterval(timer)
       const entry = vadContextsRef.current.get(uid)
@@ -386,12 +388,27 @@ export function useAudioCall({
     speakingUsersRef.current = []
     setSpeakingUsers([])
 
-    // 从音频用户列表移除自己
     syncAudioUsers(audioUsersRef.current.filter((u) => u.id !== userId))
     setIsEnabled(false)
-  }, [userId, broadcast, destroyOutboundPeers, destroyInboundPeers, syncAudioUsers, removeRemoteStream, syncSpeakerSlots])
+  }, [userId, broadcast, isVideoEnabled, destroyOutboundPeers, destroyInboundPeers, syncAudioUsers, removeRemoteStream, syncSpeakerSlots])
 
   const toggleMute = useCallback(() => {
+    // 视频开启时，静音视频流的音频轨道
+    if (isVideoEnabled) {
+      // mute 状态通过 broadcast 同步，不直接操作 video 的 localStream
+      const newMuted = !isMuted
+      setIsMuted(newMuted)
+      broadcast({
+        id: generateId(),
+        type: MESSAGE_TYPES.SYSTEM,
+        senderId: userId,
+        senderName: '',
+        timestamp: Date.now(),
+        content: JSON.stringify({ _audioMute: { muted: newMuted } }),
+      })
+      return
+    }
+
     const stream = localStreamRef.current
     if (!stream) return
 
@@ -432,12 +449,13 @@ export function useAudioCall({
   // ===== 有新参与者加入时 =====
   useEffect(() => {
     if (!isEnabled) return
+    if (isVideoEnabled) return // 视频 peer 已处理音频
     peerUserIds.forEach((id) => {
       if (id !== userId && !outboundPeersRef.current.has(id)) {
         createOutboundPeer(id)
       }
     })
-  }, [peerUserIds, userId, isEnabled, createOutboundPeer])
+  }, [peerUserIds, userId, isEnabled, isVideoEnabled, createOutboundPeer])
 
   // ===== Message handling =====
 
@@ -463,13 +481,15 @@ export function useAudioCall({
           syncAudioUsers([...audioUsersRef.current, newUser])
         }
 
-        // 如果有音频在开启，给对方创建出站 peer（避免重复：已有出站或已连接的入站则跳过）
-        const existingOut = outboundPeersRef.current.get(remoteId)
-        if (isEnabled && localStreamRef.current && !existingOut) {
-          createOutboundPeer(remoteId)
-        } else if (existingOut?.destroyed) {
-          outboundPeersRef.current.delete(remoteId)
-          createOutboundPeer(remoteId)
+        // 视频开启时视频 peer 已传输音频，不创建独立音频 peer
+        if (!isVideoEnabled) {
+          const existingOut = outboundPeersRef.current.get(remoteId)
+          if (isEnabled && localStreamRef.current && !existingOut) {
+            createOutboundPeer(remoteId)
+          } else if (existingOut?.destroyed) {
+            outboundPeersRef.current.delete(remoteId)
+            createOutboundPeer(remoteId)
+          }
         }
       } else if (data._audioStop) {
         const remoteId = msg.senderId
@@ -505,6 +525,8 @@ export function useAudioCall({
         }
         syncSpeakerSlots(slotManagerRef.current.active())
       } else if (data._audioSignal) {
+        // 视频开启时视频 peer 已处理音频信令
+        if (isVideoEnabled) return
         const { targetId, signal } = data._audioSignal
         if (targetId === userId) {
           if (signal.type === 'offer') {
@@ -545,7 +567,7 @@ export function useAudioCall({
         }
       }
     } catch { /* JSON parse failed */ }
-  }, [userId, isEnabled, syncAudioUsers, createOutboundPeer, createInboundPeer, removeRemoteStream, stopVAD, syncSpeakerSlots])
+  }, [userId, isEnabled, isVideoEnabled, syncAudioUsers, createOutboundPeer, createInboundPeer, removeRemoteStream, stopVAD, syncSpeakerSlots])
 
   // ===== Cleanup =====
   useEffect(() => {

@@ -232,7 +232,11 @@ export function useVideoCall({
           frameRate: { ideal: VIDEO_CAMERA_FPS },
           facingMode: 'user',
         } as MediaTrackConstraints,
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        } as MediaTrackConstraints,
       })
 
       localStreamRef.current = stream
