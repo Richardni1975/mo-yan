@@ -36,7 +36,7 @@ interface UseScreenShareReturn {
   /** 带宽估测值（bps） */
   uploadBps: number
   /** 开始共享（用户操作入口） */
-  startShare: () => Promise<void>
+  startShare: (includeAudio?: boolean) => Promise<void>
   /** 停止共享 */
   stopShare: () => void
   /** 处理收到的消息（由父组件连接 socket 消息） */
@@ -415,25 +415,23 @@ export function useScreenShare({
 
   // ===== Public API =====
 
-  const startShare = useCallback(async () => {
+  const startShare = useCallback(async (includeAudio = false) => {
     try {
-      // 屏幕共享仅捕获视频，不捕获系统音频
-      // 原因：系统音频会捕获扬声器播放的远端人声 → 回声啸叫
-      // 人声通过视频/语音通话的麦克风通道传输，互不干扰
-      //
-      // 如需分享系统音频（如播放视频），可在开始共享后
-      // 通过 stream.getAudioTracks() 手动启用，或关闭麦克风
+      // 根据用户选择决定是否捕获系统音频
+      // ⚠ 系统音频开启时，回声消除可能不完全，建议使用耳机
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: 1920 },
           height: { ideal: 1080 },
           frameRate: { ideal: 15 },
         } as MediaTrackConstraints,
-        audio: false,
+        audio: includeAudio,
       })
 
-      // 防御：如果用户手动勾选了"共享音频"，强制移除音频轨道防止回声
-      stream.getAudioTracks().forEach((t) => { t.stop(); stream.removeTrack(t) })
+      // 如果不包含音频，移除浏览器可能自动附加的音频轨道
+      if (!includeAudio) {
+        stream.getAudioTracks().forEach((t) => { t.stop(); stream.removeTrack(t) })
+      }
 
       screenStreamRef.current = stream
       currentModeRef.current = 'webrtc'

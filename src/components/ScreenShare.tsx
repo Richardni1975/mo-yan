@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ShareMode } from '../utils/types'
 import { isScreenShareSupported } from '../utils/helpers'
 
@@ -9,7 +9,7 @@ interface Props {
   uploadBps: number
   isSharer: boolean
   sharerName: string | null
-  onStartShare: () => void
+  onStartShare: (includeAudio?: boolean) => void
   onStopShare: () => void
 }
 
@@ -20,6 +20,7 @@ export function ScreenShare({
   const supported = isScreenShareSupported()
   const videoRef = useRef<HTMLVideoElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
+  const [shareAudio, setShareAudio] = useState(false)
 
   // 用 ref 直接更新 img src，避免 React 每帧重渲染导致画面闪烁
   useEffect(() => {
@@ -37,17 +38,27 @@ export function ScreenShare({
 
   return (
     <div className="panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <div className="panel-header" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+      <div className="panel-header" style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 8 }}>
         {shareMode !== 'idle' && (
           <span style={{ fontSize: '0.7rem', color: 'var(--ink-light)' }}>
             {shareMode === 'webrtc' ? 'WebRTC' : '截图'} | {(uploadBps / 1_000_000).toFixed(1)} Mbps
           </span>
         )}
         {!isSharer && shareMode === 'idle' && (
-          <button className="btn btn-sm btn-primary" onClick={onStartShare}
-            disabled={!supported} style={{ fontSize: '0.7rem', padding: '2px 10px' }}>
-            {!supported ? '不支持' : '共享屏幕'}
-          </button>
+          <>
+            <button className="btn btn-sm btn-primary" onClick={() => onStartShare(shareAudio)}
+              disabled={!supported} style={{ fontSize: '0.7rem', padding: '2px 10px' }}>
+              {!supported ? '不支持' : '共享屏幕'}
+            </button>
+            <label style={{
+              fontSize: '0.65rem', color: 'var(--ink-medium)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 3, userSelect: 'none',
+            }}>
+              <input type="checkbox" checked={shareAudio} onChange={(e) => setShareAudio(e.target.checked)}
+                style={{ cursor: 'pointer' }} />
+              同时共享系统声音
+            </label>
+          </>
         )}
         {isSharer && (
           <button className="btn btn-sm btn-secondary" onClick={onStopShare}

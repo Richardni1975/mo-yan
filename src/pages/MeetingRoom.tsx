@@ -99,9 +99,9 @@ export function MeetingRoom() {
   })
 
   // 互斥：开启摄像头时停止共享，开启共享时关闭摄像头
-  const handleStartShare = useCallback(() => {
+  const handleStartShare = useCallback((includeAudio?: boolean) => {
     if (videoCall.isEnabled) videoCall.stopVideo()
-    screenShare.startShare()
+    screenShare.startShare(includeAudio)
   }, [videoCall, screenShare])
 
   const handleStartVideo = useCallback(() => {
