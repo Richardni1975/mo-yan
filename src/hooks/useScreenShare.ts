@@ -421,28 +421,23 @@ export function useScreenShare({
 
   const startShare = useCallback(async () => {
     try {
-      // 请求屏幕共享（先尝试带系统音频，失败则回退到仅视频）
-      let stream: MediaStream
-      try {
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 15 },
-          } as MediaTrackConstraints,
-          audio: true,
-        })
-      } catch (audioErr) {
-        console.warn('[ScreenShare] 系统音频不可用，回退到无音频模式:', audioErr)
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 15 },
-          } as MediaTrackConstraints,
-          audio: false,
-        })
-      }
+      // 屏幕共享仅捕获视频，不捕获系统音频
+      // 原因：系统音频会捕获扬声器播放的远端人声 → 回声啸叫
+      // 人声通过视频/语音通话的麦克风通道传输，互不干扰
+      //
+      // 如需分享系统音频（如播放视频），可在开始共享后
+      // 通过 stream.getAudioTracks() 手动启用，或关闭麦克风
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 15 },
+        } as MediaTrackConstraints,
+        audio: false,
+      })
+
+      // 防御：如果用户手动勾选了"共享音频"，强制移除音频轨道防止回声
+      stream.getAudioTracks().forEach((t) => { t.stop(); stream.removeTrack(t) })
 
       screenStreamRef.current = stream
       currentModeRef.current = 'webrtc'
