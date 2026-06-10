@@ -128,12 +128,25 @@ export function useVideoCall({
 
     peer.on('connect', () => {
       console.log(`[video] outbound to ${targetId} connected`)
+      pushDebugLog(`[outbound-${targetId}] connected`)
     })
 
     peer.on('close', () => {
       console.log(`[video] outbound to ${targetId} closed`)
+      pushDebugLog(`[outbound-${targetId}] closed`)
       outboundPeersRef.current.delete(targetId)
     })
+
+    // 15秒超时诊断：如果连接未建立，打印当前 ICE 状态帮助排查
+    const connectTimeout = setTimeout(() => {
+      if (!peer.connected && !peer.destroyed) {
+        const state = (peer as unknown as { _pc?: RTCPeerConnection })._pc?.iceConnectionState ?? '?'
+        console.warn(`[video] outbound to ${targetId} 15s未连接, ICE状态=${state}`)
+        pushDebugLog(`[outbound-${targetId}] timeout ICE=${state}`)
+      }
+    }, 15000)
+    peer.once('connect', () => clearTimeout(connectTimeout))
+    peer.once('close', () => clearTimeout(connectTimeout))
 
     outboundPeersRef.current.set(targetId, peer)
   }, [userId, broadcast])
@@ -218,13 +231,26 @@ export function useVideoCall({
 
     peer.on('connect', () => {
       console.log(`[video] inbound from ${remoteId} connected`)
+      pushDebugLog(`[inbound-${remoteId}] connected`)
     })
 
     peer.on('close', () => {
       console.log(`[video] inbound from ${remoteId} closed`)
+      pushDebugLog(`[inbound-${remoteId}] closed`)
       inboundPeersRef.current.delete(remoteId)
       removeRemoteStream(remoteId)
     })
+
+    // 15秒超时诊断
+    const connectTimeout = setTimeout(() => {
+      if (!peer.connected && !peer.destroyed) {
+        const state = (peer as unknown as { _pc?: RTCPeerConnection })._pc?.iceConnectionState ?? '?'
+        console.warn(`[video] inbound from ${remoteId} 15s未连接, ICE状态=${state}`)
+        pushDebugLog(`[inbound-${remoteId}] timeout ICE=${state}`)
+      }
+    }, 15000)
+    peer.once('connect', () => clearTimeout(connectTimeout))
+    peer.once('close', () => clearTimeout(connectTimeout))
 
     inboundPeersRef.current.set(remoteId, peer)
   }, [userId, broadcast, addRemoteStream, removeRemoteStream])
