@@ -68,7 +68,7 @@ export function MeetingRoom() {
   })
 
   // ===== Chat =====
-  const chat = useChat({ userId, userName: nickname, broadcast })
+  const chat = useChat({ userId, userName: nickname, roomId: effectiveRoomId, broadcast })
 
   // ===== Voting =====
   const voting = useVoting({ userId, userName: nickname, broadcast })
@@ -739,12 +739,24 @@ function escapeHtml(text: string): string {
 }
 
 function downloadFile(content: string, mime: string, filename: string) {
-  const blob = new Blob([content], { type: `${mime};charset=utf-8` })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = filename
-  document.body.appendChild(a); a.click()
-  document.body.removeChild(a); URL.revokeObjectURL(url)
+  try {
+    const blob = new Blob([content], { type: `${mime};charset=utf-8` })
+    const url = (window.URL || URL).createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+    // 延迟回收 URL，确保浏览器有足够时间启动下载
+    setTimeout(() => {
+      document.body.removeChild(a)
+      ;(window.URL || URL).revokeObjectURL(url)
+    }, 500)
+  } catch (err) {
+    console.error('[Export] 下载失败:', err)
+    alert('下载失败，请重试')
+  }
 }
 
 /**
