@@ -273,6 +273,56 @@ export function MeetingRoom() {
   }, [effectiveRoomId, copying])
 
   // ===== 导出 =====
+  // 一键导出全部（聊天 + 投票）为 TXT
+  const doExportAllTxt = useCallback(() => {
+    if (chat.messages.length === 0 && voting.votes.length === 0) {
+      alert('暂无聊天记录和投票记录')
+      return
+    }
+    const time = formatDateTime(new Date())
+    let txt = `═══════════════════════════════════\n`
+    txt += `  默言无声 · 会议记录\n`
+    txt += `  房间: ${effectiveRoomId}\n`
+    txt += `  导出时间: ${time}\n`
+    txt += `═══════════════════════════════════\n\n`
+
+    // 聊天记录
+    if (chat.messages.length > 0) {
+      txt += `━━━ 聊天记录 (${chat.messages.length} 条) ━━━\n\n`
+      chat.messages.forEach((m) => {
+        const ts = formatDateTime(new Date(m.timestamp))
+        txt += `[${ts}] ${m.senderName}：\n`
+        txt += `  ${m.content}\n\n`
+      })
+    }
+
+    // 投票结果
+    if (voting.votes.length > 0) {
+      txt += `━━━ 投票结果 ━━━\n\n`
+      voting.votes.forEach((vote) => {
+        const vr = voting.results[vote.id] ?? []
+        const total = vr.reduce((s, r) => s + r.count, 0)
+        const modeLabel = vote.mode === 'real_name' ? '实名' : vote.mode === 'anonymous' ? '匿名' : '混合'
+        txt += `▸ ${vote.title}\n`
+        txt += `  模式: ${modeLabel} | 总票数: ${total}\n`
+        vr.forEach((r) => {
+          const opt = vote.options.find((o) => o.id === r.optionId)
+          const voters = r.voters ? `（${r.voters.join('、')}）` : ''
+          txt += `  - ${opt?.label ?? '?'}: ${r.count} 票${voters}\n`
+        })
+        txt += `\n`
+      })
+    }
+
+    txt += `═══════════════════════════════════\n`
+    txt += `  由「默言无声」生成\n`
+    txt += `  https://mo-yan.pages.dev\n`
+    txt += `═══════════════════════════════════\n`
+
+    const ok = downloadFile(txt, 'text/plain', `默言无声_会议记录_${effectiveRoomId}.txt`)
+    if (ok) setShowExport(false)
+  }, [chat.messages, voting.votes, voting.results, effectiveRoomId])
+
   const doExportChat = useCallback(() => {
     if (chat.messages.length === 0) { alert('暂无聊天记录'); return }
     const time = formatDateTime(new Date())
@@ -407,17 +457,24 @@ ${voting.votes.map(vote => {
                 borderRadius: 'var(--radius-sm)', boxShadow: '0 2px 8px var(--shadow-color)',
                 minWidth: 150, overflow: 'hidden',
               }}>
+                <button onClick={doExportAllTxt} style={{
+                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px',
+                  fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--ink-darkest)', border: 'none', background: 'transparent', cursor: 'pointer',
+                }}>
+                  📄 一键导出全部 (TXT)
+                </button>
+                <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
                 <button onClick={doExportChat} style={{
                   display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px',
                   fontSize: '0.8rem', color: 'var(--ink-dark)', border: 'none', background: 'transparent', cursor: 'pointer',
                 }}>
-                  导出聊天记录
+                  导出聊天记录 (HTML)
                 </button>
                 <button onClick={doExportVotes} style={{
                   display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px',
                   fontSize: '0.8rem', color: 'var(--ink-dark)', border: 'none', background: 'transparent', cursor: 'pointer',
                 }}>
-                  导出投票结果
+                  导出投票结果 (HTML)
                 </button>
               </div>
             )}
@@ -495,6 +552,14 @@ ${voting.votes.map(vote => {
                 borderRadius: 'var(--radius-sm)', boxShadow: '0 2px 8px var(--shadow-color)',
                 minWidth: 140, overflow: 'hidden',
               }}>
+                <button onClick={doExportAllTxt} style={{
+                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
+                  fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--ink-darkest)', background: 'transparent', border: 'none',
+                  cursor: 'pointer',
+                }}>
+                  📄 一键导出全部
+                </button>
+                <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
                 <button onClick={doExportChat} style={{
                   display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
                   fontSize: '0.75rem', color: 'var(--ink-dark)', background: 'transparent', border: 'none',

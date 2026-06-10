@@ -5,6 +5,18 @@ import { supabase, isSupabaseConfigured } from '../utils/supabase'
 import type { ChatMessage, RoomMessage } from '../utils/types'
 
 const TABLE_NAME = 'chat_messages'
+const LS_PREFIX = 'mo_yan_chat_'
+
+function lsKey(roomId: string) { return LS_PREFIX + roomId }
+function saveLocal(roomId: string, msgs: ChatMessage[]) {
+  try { localStorage.setItem(lsKey(roomId), JSON.stringify(msgs.slice(-MAX_CACHED_MESSAGES))) } catch {}
+}
+function loadLocal(roomId: string): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(lsKey(roomId))
+    return raw ? JSON.parse(raw) as ChatMessage[] : []
+  } catch { return [] }
+}
 
 interface UseChatOptions {
   userId: string
@@ -23,50 +35,57 @@ interface UseChatReturn {
 
 export function useChat({ userId, userName, roomId, broadcast }: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const seqRef = useRef(0)
+  const msgsRef = useRef<ChatMessage[]>([])
   const loadedRef = useRef(false)
 
-  // 加入房间时从 Supabase 加载历史消息
+  // 加入房间时加载历史消息（优先 Supabase，兜底 localStorage）
   useEffect(() => {
     if (loadedRef.current) return
-    if (!isSupabaseConfigured()) return
-
     loadedRef.current = true
 
     const loadHistory = async () => {
-      try {
-        const { data, error } = await supabase
-          .from(TABLE_NAME)
-          .select('*')
-          .eq('room_id', roomId)
-          .order('timestamp', { ascending: true })
-          .limit(MAX_CACHED_MESSAGES)
+      let history: ChatMessage[] = []
 
-        if (error) {
-          // 表不存在时静默降级，使用纯内存模式
-          if (error.code === '42P01') {
-            console.log('[Chat] chat_messages 表不存在，使用纯内存模式。请在 Supabase 中创建该表以启用持久化。')
-          } else {
-            console.warn('[Chat] 加载历史消息失败:', error.message)
+      // 1. 尝试从 Supabase 加载
+      if (isSupabaseConfigured()) {
+        try {
+          const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select('*')
+            .eq('room_id', roomId)
+            .order('timestamp', { ascending: true })
+            .limit(MAX_CACHED_MESSAGES)
+
+          if (!error && data && data.length > 0) {
+            history = data.map((row: Record<string, unknown>) => ({
+              id: row.id as string,
+              type: MESSAGE_TYPES.CHAT,
+              senderId: row.sender_id as string,
+              senderName: row.sender_name as string,
+              timestamp: row.timestamp as number,
+              content: row.content as string,
+              isAnonymous: row.is_anonymous as boolean,
+            }))
+            console.log(`[Chat] 从 Supabase 加载了 ${history.length} 条历史消息`)
+          } else if (error && error.code !== '42P01') {
+            console.warn('[Chat] Supabase 加载失败, 尝试本地:', error.message)
           }
-          return
+        } catch (err) {
+          console.warn('[Chat] Supabase 异常, 尝试本地:', err)
         }
+      }
 
-        if (data && data.length > 0) {
-          const history: ChatMessage[] = data.map((row: Record<string, unknown>) => ({
-            id: row.id as string,
-            type: MESSAGE_TYPES.CHAT,
-            senderId: row.sender_id as string,
-            senderName: row.sender_name as string,
-            timestamp: row.timestamp as number,
-            content: row.content as string,
-            isAnonymous: row.is_anonymous as boolean,
-          }))
-          setMessages(history)
-          console.log(`[Chat] 已加载 ${history.length} 条历史消息`)
+      // 2. 兜底：从 localStorage 加载
+      if (history.length === 0) {
+        history = loadLocal(roomId)
+        if (history.length > 0) {
+          console.log(`[Chat] 从本地加载了 ${history.length} 条历史消息`)
         }
-      } catch (err) {
-        console.warn('[Chat] 加载历史消息异常，使用纯内存模式:', err)
+      }
+
+      if (history.length > 0) {
+        msgsRef.current = history
+        setMessages(history)
       }
     }
 
@@ -84,19 +103,18 @@ export function useChat({ userId, userName, roomId, broadcast }: UseChatOptions)
       content: content.trim(),
       isAnonymous,
     }
-    seqRef.current++
 
     broadcast(msg)
 
-    // 本地立即追加
-    setMessages((prev) => {
-      const next = [...prev, msg]
-      return next.length > MAX_CACHED_MESSAGES
-        ? next.slice(next.length - MAX_CACHED_MESSAGES)
-        : next
-    })
+    // 本地追加
+    const next = [...msgsRef.current, msg].slice(-MAX_CACHED_MESSAGES)
+    msgsRef.current = next
+    setMessages(next)
 
-    // 持久化到 Supabase（后台静默进行）
+    // 持久化到 localStorage（始终保存，兜底）
+    saveLocal(roomId, next)
+
+    // 持久化到 Supabase（后台静默）
     if (isSupabaseConfigured()) {
       supabase.from(TABLE_NAME).insert({
         id: msg.id,
@@ -108,7 +126,7 @@ export function useChat({ userId, userName, roomId, broadcast }: UseChatOptions)
         timestamp: msg.timestamp,
       }).then(({ error }) => {
         if (error && error.code !== '42P01') {
-          console.warn('[Chat] 保存消息失败:', error.message)
+          console.warn('[Chat] Supabase 保存失败:', error.message)
         }
       }).catch(() => {})
     }
@@ -117,21 +135,25 @@ export function useChat({ userId, userName, roomId, broadcast }: UseChatOptions)
   const addMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => {
       if (prev.some((m) => m.id === msg.id)) return prev
-      const next = [...prev, msg]
-      return next.length > MAX_CACHED_MESSAGES
-        ? next.slice(next.length - MAX_CACHED_MESSAGES)
-        : next
+      const next = [...prev, msg].slice(-MAX_CACHED_MESSAGES)
+      msgsRef.current = next
+      saveLocal(roomId, next)
+      return next
     })
-  }, [])
+  }, [roomId])
 
   const addHistory = useCallback((msgs: ChatMessage[]) => {
-    setMessages(msgs.slice(-MAX_CACHED_MESSAGES))
-  }, [])
+    const sliced = msgs.slice(-MAX_CACHED_MESSAGES)
+    msgsRef.current = sliced
+    setMessages(sliced)
+    saveLocal(roomId, sliced)
+  }, [roomId])
 
   const clearMessages = useCallback(() => {
+    msgsRef.current = []
     setMessages([])
-    seqRef.current = 0
-  }, [])
+    try { localStorage.removeItem(lsKey(roomId)) } catch {}
+  }, [roomId])
 
   return { messages, sendMessage, addMessage, addHistory, clearMessages }
 }
