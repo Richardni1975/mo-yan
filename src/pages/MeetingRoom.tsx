@@ -69,7 +69,7 @@ export function MeetingRoom() {
   const chat = useChat({ userId, userName: nickname, roomId: effectiveRoomId, broadcast })
 
   // ===== Voting =====
-  const voting = useVoting({ userId, userName: nickname, broadcast })
+  const voting = useVoting({ userId, userName: nickname, roomId: effectiveRoomId, broadcast })
 
   // ===== Screen Share =====
   const screenShare = useScreenShare({
