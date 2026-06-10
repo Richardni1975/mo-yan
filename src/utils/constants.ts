@@ -4,9 +4,21 @@ export const ICE_SERVERS: RTCIceServer[] = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
   { urls: ['stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302'] },
   { urls: ['stun:stun4.l.google.com:19302'] },
-  // 免费 TURN 中继（跨对称 NAT 时使用）
+  // 免费 TURN 中继 #1 — TCP 端口，防火墙友好
   {
-    urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443'],
+    urls: [
+      'turn:openrelay.metered.ca:443?transport=tcp',
+      'turns:openrelay.metered.ca:443?transport=tcp',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+  // 免费 TURN 中继 #2 — UDP 端口
+  {
+    urls: [
+      'turn:openrelay.metered.ca:80?transport=udp',
+      'turn:openrelay.metered.ca:3478?transport=udp',
+    ],
     username: 'openrelayproject',
     credential: 'openrelayproject',
   },

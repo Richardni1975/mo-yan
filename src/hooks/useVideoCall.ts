@@ -98,11 +98,17 @@ export function useVideoCall({
     peer.on('signal', (signal) => {
       if (signal.type === 'offer') { console.log(`[WebRTC-Debug][outbound-${targetId}] createOffer`); pushDebugLog(`[outbound-${targetId}] createOffer`) }
       if (signal.type === 'candidate') {
-        const cType = signal.candidate?.candidate?.includes('typ host') ? 'host' :
-          signal.candidate?.candidate?.includes('typ srflx') ? 'srflx' :
-          signal.candidate?.candidate?.includes('typ relay') ? 'relay' : signal.candidate?.type ?? 'end'
-        console.log(`[WebRTC-Debug][outbound-${targetId}] onicecandidate candidateType=${cType}`)
-        pushDebugLog(`[outbound-${targetId}] onicecandidate type=${cType}`)
+        // 从 candidate SDP 字符串提取类型（JSON 序列化可能丢失 RTCIceCandidate.type）
+        const candStr = typeof signal.candidate?.candidate === 'string' ? signal.candidate.candidate : ''
+        const cType = candStr.includes(' typ host') ? 'host' :
+          candStr.includes(' typ srflx') ? 'srflx' :
+          candStr.includes(' typ relay') ? 'relay' :
+          (signal.candidate === null || signal.candidate === undefined) ? 'end' :
+          'other'
+        if (cType !== 'end') {
+          console.log(`[WebRTC-Debug][outbound-${targetId}] ICE ${cType}`)
+          pushDebugLog(`[outbound-${targetId}] onicecandidate type=${cType}`)
+        }
       }
       console.log(`[video] outbound to ${targetId} signal:`, signal.type)
       broadcast({
@@ -137,22 +143,25 @@ export function useVideoCall({
     outboundPeersRef.current.clear()
   }, [])
 
-  // 补齐遗漏的出站 peer（应对 presence 同步慢，带 10s 冷却防止风暴）
+  // 补齐遗漏的出站 peer（错峰创建，带 10s 冷却防止风暴）
   // 注意：必须放在 hasVideoSlot 和 createOutboundPeer 之后，避免 TDZ 错误
   const ensureOutboundPeers = useCallback(() => {
     if (!localStreamRef.current) return
     if (!hasVideoSlot()) return
     const now = Date.now()
+    let staggerMs = 0
     peerUserIdsRef.current.forEach((id) => {
       if (id === userId) return
       const existing = outboundPeersRef.current.get(id)
       if (!existing || existing.destroyed) {
-        // 10 秒内不重复创建同一个 peer，防止 ICE 失败时的连接风暴
         const lastCreated = peerCreatedAtRef.current.get(id) ?? 0
         if (now - lastCreated < 10000) return
         if (existing?.destroyed) outboundPeersRef.current.delete(id)
         peerCreatedAtRef.current.set(id, now)
-        createOutboundPeer(id)
+        // 每个 peer 间隔 300ms 创建，避免同一时刻 ICE 风暴
+        const delay = staggerMs
+        staggerMs += 300
+        setTimeout(() => createOutboundPeer(id), delay)
       }
     })
   }, [userId, hasVideoSlot, createOutboundPeer])
@@ -172,11 +181,16 @@ export function useVideoCall({
     peer.on('signal', (signal) => {
       if (signal.type === 'answer') { console.log(`[WebRTC-Debug][inbound-${remoteId}] createAnswer`); pushDebugLog(`[inbound-${remoteId}] createAnswer`) }
       if (signal.type === 'candidate') {
-        const cType = signal.candidate?.candidate?.includes('typ host') ? 'host' :
-          signal.candidate?.candidate?.includes('typ srflx') ? 'srflx' :
-          signal.candidate?.candidate?.includes('typ relay') ? 'relay' : signal.candidate?.type ?? 'end'
-        console.log(`[WebRTC-Debug][inbound-${remoteId}] onicecandidate candidateType=${cType}`)
-        pushDebugLog(`[inbound-${remoteId}] onicecandidate type=${cType}`)
+        const candStr = typeof signal.candidate?.candidate === 'string' ? signal.candidate.candidate : ''
+        const cType = candStr.includes(' typ host') ? 'host' :
+          candStr.includes(' typ srflx') ? 'srflx' :
+          candStr.includes(' typ relay') ? 'relay' :
+          (signal.candidate === null || signal.candidate === undefined) ? 'end' :
+          'other'
+        if (cType !== 'end') {
+          console.log(`[WebRTC-Debug][inbound-${remoteId}] ICE ${cType}`)
+          pushDebugLog(`[inbound-${remoteId}] onicecandidate type=${cType}`)
+        }
       }
       console.log(`[video] inbound from ${remoteId} signal:`, signal.type)
       broadcast({

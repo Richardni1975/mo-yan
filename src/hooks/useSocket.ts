@@ -164,7 +164,16 @@ export function useSocket({ roomId, userId, userName, onMessage, onParticipantsC
   // cleanup on unmount
   useEffect(() => {
     mountedRef.current = true
+    // 移动端: 页面隐藏/关闭时自动退出（beforeunload 在手机上不可靠）
+    const handlePageHide = () => { leaveRoom() }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') leaveRoom()
+    }
+    window.addEventListener('pagehide', handlePageHide)
+    document.addEventListener('visibilitychange', handleVisibility)
     return () => {
+      window.removeEventListener('pagehide', handlePageHide)
+      document.removeEventListener('visibilitychange', handleVisibility)
       leaveRoom()
     }
   }, [leaveRoom])
