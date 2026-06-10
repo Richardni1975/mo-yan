@@ -516,12 +516,10 @@ export function useAudioCall({
         }
         syncSpeakerSlots(slotManagerRef.current.active())
       } else if (data._audioSignal) {
-        // 视频开启时视频 peer 已处理音频信令
-        if (isVideoEnabled) return
         const { targetId, signal } = data._audioSignal
         if (targetId === userId) {
           if (signal.type === 'offer') {
-            // 防止信令竞态条件：已有 connected 的 inbound peer 则跳过重复 offer
+            // 入站 offer：即使视频已开启也接收（纯语音发言者的音频）
             const existingInbound = inboundPeersRef.current.get(msg.senderId)
             if (existingInbound) {
               if (existingInbound.connected) {
@@ -544,8 +542,9 @@ export function useAudioCall({
               inboundPeersRef.current.get(msg.senderId)?.signal(signal)
             } catch { /* ignore */ }
           } else {
-            // answer 或 ICE candidate
-            let peer = outboundPeersRef.current.get(msg.senderId)
+            // answer 或 ICE candidate: 视频开启时跳过出站（视频 peer 已处理）
+            // 但入站 ICE candidate 仍需处理
+            let peer = isVideoEnabled ? null : outboundPeersRef.current.get(msg.senderId)
             if (peer) {
               try { peer.signal(signal) } catch { /* ignore */ }
             } else {
