@@ -323,19 +323,8 @@ ${voting.votes.map(vote => {
     )
   }
 
-  console.log('[MeetingRoom] 渲染中, roomId=', effectiveRoomId, 'connectionState=', connectionState, 'isSupabaseConfigured=', isSupabaseConfigured())
-
   return (
     <div style={{ height: viewportHeight, display: 'flex', flexDirection: 'column', background: 'var(--paper-light)' }}>
-      {/* DEBUG 横幅 — 确认 React 在渲染 */}
-      <div style={{
-        background: 'red', color: 'white', padding: '4px 8px',
-        fontSize: '0.75rem', fontWeight: 'bold', textAlign: 'center',
-        flexShrink: 0,
-      }}>
-        DEBUG: 房间 {effectiveRoomId} | 连接状态: {connectionState} | {participants.length}人在线
-      </div>
-
       {/* ===== 顶部导航 ===== */}
       <header style={{
         display: 'flex', alignItems: 'center', gap: isMobile ? 3 : 12,
