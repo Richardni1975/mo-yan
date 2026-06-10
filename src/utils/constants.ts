@@ -39,6 +39,9 @@ export const RECONNECT_BASE_DELAY = 1000
 /** 断线重连最大间隔（毫秒） */
 export const RECONNECT_MAX_DELAY = 30000
 
+/** 单条聊天消息最大字符数（防止大文本阻塞广播通道） */
+export const MAX_CHAT_LENGTH = 4000
+
 /** 聊天内存中保留的最大消息数（超出释放，但全量存于 Supabase） */
 export const MAX_CACHED_MESSAGES = 500
 

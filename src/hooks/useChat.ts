@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { generateId } from '../utils/helpers'
-import { MAX_CACHED_MESSAGES, MESSAGE_TYPES } from '../utils/constants'
+import { MAX_CACHED_MESSAGES, MAX_CHAT_LENGTH, MESSAGE_TYPES } from '../utils/constants'
 import { supabase, isSupabaseConfigured } from '../utils/supabase'
 import type { ChatMessage, RoomMessage } from '../utils/types'
 
@@ -93,14 +93,19 @@ export function useChat({ userId, userName, roomId, broadcast }: UseChatOptions)
   }, [roomId])
 
   const sendMessage = useCallback((content: string, isAnonymous: boolean) => {
-    if (!content.trim()) return
+    let text = content.trim()
+    if (!text) return
+    // 限制单条消息长度，防止大日志阻塞广播通道
+    if (text.length > MAX_CHAT_LENGTH) {
+      text = text.slice(0, MAX_CHAT_LENGTH) + '\n…(内容过长已截断)'
+    }
     const msg: ChatMessage = {
       id: generateId(),
       type: MESSAGE_TYPES.CHAT,
       senderId: userId,
       senderName: isAnonymous ? 'momo' : userName,
       timestamp: Date.now(),
-      content: content.trim(),
+      content: text,
       isAnonymous,
     }
 
