@@ -1,10 +1,9 @@
-import { Component, StrictMode } from 'react'
+import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import './styles/global.css'
 
-// 全局错误边界 — 捕获 React 渲染崩溃，避免空白页面
-class ErrorBoundary extends Component<
+class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: Error | null }
 > {
@@ -12,15 +11,12 @@ class ErrorBoundary extends Component<
     super(props)
     this.state = { error: null }
   }
-
   static getDerivedStateFromError(error: Error) {
     return { error }
   }
-
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[MeetingRoom] 渲染崩溃:', error.message, info.componentStack)
+  componentDidCatch(error: Error) {
+    console.error('Crash:', error.message)
   }
-
   render() {
     if (this.state.error) {
       return (
@@ -54,9 +50,7 @@ class ErrorBoundary extends Component<
 }
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>,
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>,
 )

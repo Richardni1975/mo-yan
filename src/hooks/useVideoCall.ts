@@ -57,20 +57,6 @@ export function useVideoCall({
     peerUserIdsRef.current = peerUserIds
   }, [peerUserIds])
 
-  // 补齐遗漏的出站 peer（应对 presence 同步慢导致 startVideo 时 participant 列表不全）
-  const ensureOutboundPeers = useCallback(() => {
-    if (!localStreamRef.current) return
-    if (!hasVideoSlot()) return
-    peerUserIdsRef.current.forEach((id) => {
-      if (id === userId) return
-      const existing = outboundPeersRef.current.get(id)
-      if (!existing || existing.destroyed) {
-        if (existing?.destroyed) outboundPeersRef.current.delete(id)
-        createOutboundPeer(id)
-      }
-    })
-  }, [userId, hasVideoSlot, createOutboundPeer])
-
   const syncVideoUsers = useCallback((users: VideoUser[]) => {
     videoUsersRef.current = users
     setVideoUsers(users)
@@ -150,6 +136,21 @@ export function useVideoCall({
     outboundPeersRef.current.forEach((p) => p.destroy())
     outboundPeersRef.current.clear()
   }, [])
+
+  // 补齐遗漏的出站 peer（应对 presence 同步慢导致 startVideo 时 participant 列表不全）
+  // 注意：必须放在 hasVideoSlot 和 createOutboundPeer 之后，避免 TDZ 错误
+  const ensureOutboundPeers = useCallback(() => {
+    if (!localStreamRef.current) return
+    if (!hasVideoSlot()) return
+    peerUserIdsRef.current.forEach((id) => {
+      if (id === userId) return
+      const existing = outboundPeersRef.current.get(id)
+      if (!existing || existing.destroyed) {
+        if (existing?.destroyed) outboundPeersRef.current.delete(id)
+        createOutboundPeer(id)
+      }
+    })
+  }, [userId, hasVideoSlot, createOutboundPeer])
 
   // ===== Inbound peers (receive others' cameras) =====
 
