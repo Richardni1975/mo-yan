@@ -38,9 +38,6 @@ export function MeetingRoom() {
   })
   const [participants, setParticipants] = useState<Array<{ id: string; name: string; isSharing: boolean }>>([])
   const [sharerName, setSharerName] = useState<string | null>(null)
-  const [showExport, setShowExport] = useState(false)
-  const desktopExportRef = useRef<HTMLDivElement>(null)
-  const mobileExportRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [showVote, setShowVote] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
@@ -350,20 +347,6 @@ ${voting.votes.map(vote => {
     if (ok) setShowExport(false)
   }, [voting.votes, voting.results])
 
-  // 点击外部关闭导出菜单（兼顾桌面端和移动端 ref）
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node
-      const insideDesktop = desktopExportRef.current?.contains(target)
-      const insideMobile = mobileExportRef.current?.contains(target)
-      if (!insideDesktop && !insideMobile) {
-        setShowExport(false)
-      }
-    }
-    if (showExport) document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showExport])
-
   if (!isSupabaseConfigured()) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
@@ -445,40 +428,10 @@ ${voting.votes.map(vote => {
             退出
           </button>
 
-          <div ref={desktopExportRef} style={{ position: 'relative' }}>
-            <button className="btn btn-sm btn-secondary" onClick={() => setShowExport(!showExport)}
-              style={{ fontSize: '0.75rem', padding: '3px 10px' }}>
-              导出
-            </button>
-            {showExport && (
-              <div style={{
-                position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 100,
-                background: 'var(--paper-white)', border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)', boxShadow: '0 2px 8px var(--shadow-color)',
-                minWidth: 150, overflow: 'hidden',
-              }}>
-                <button onClick={doExportAllTxt} style={{
-                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px',
-                  fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--ink-darkest)', border: 'none', background: 'transparent', cursor: 'pointer',
-                }}>
-                  📄 一键导出全部 (TXT)
-                </button>
-                <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-                <button onClick={doExportChat} style={{
-                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px',
-                  fontSize: '0.8rem', color: 'var(--ink-dark)', border: 'none', background: 'transparent', cursor: 'pointer',
-                }}>
-                  导出聊天记录 (HTML)
-                </button>
-                <button onClick={doExportVotes} style={{
-                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px',
-                  fontSize: '0.8rem', color: 'var(--ink-dark)', border: 'none', background: 'transparent', cursor: 'pointer',
-                }}>
-                  导出投票结果 (HTML)
-                </button>
-              </div>
-            )}
-          </div>
+          <button className="btn btn-sm btn-ghost" onClick={doExportAllTxt}
+            style={{ fontSize: '0.7rem', padding: '3px 8px', color: 'var(--bamboo-green)' }}>
+            📄 保存记录
+          </button>
         </div>
 
         {/* 移动端按钮行：🎤 🎥 🙈 🗳️ 📤 */}
@@ -534,49 +487,15 @@ ${voting.votes.map(vote => {
             🗳️
           </button>
           {/* 导出 */}
-          <div ref={mobileExportRef} style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowExport(!showExport)}
-              style={{
-                fontSize: '0.85rem', padding: '2px 5px', lineHeight: 1, border: 'none',
-                background: showExport ? 'var(--ink-blue)' : 'transparent',
-                color: showExport ? '#fff' : 'var(--ink-medium)',
-                borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-              }}>
-              📤
-            </button>
-            {showExport && (
-              <div style={{
-                position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 100,
-                background: 'var(--paper-white)', border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-sm)', boxShadow: '0 2px 8px var(--shadow-color)',
-                minWidth: 140, overflow: 'hidden',
-              }}>
-                <button onClick={doExportAllTxt} style={{
-                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
-                  fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--ink-darkest)', background: 'transparent', border: 'none',
-                  cursor: 'pointer',
-                }}>
-                  📄 一键导出全部
-                </button>
-                <div style={{ borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-                <button onClick={doExportChat} style={{
-                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
-                  fontSize: '0.75rem', color: 'var(--ink-dark)', background: 'transparent', border: 'none',
-                  cursor: 'pointer',
-                }}>
-                  导出聊天记录
-                </button>
-                <button onClick={doExportVotes} style={{
-                  display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
-                  fontSize: '0.75rem', color: 'var(--ink-dark)', background: 'transparent', border: 'none',
-                  cursor: 'pointer',
-                }}>
-                  导出投票结果
-                </button>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={doExportAllTxt}
+            style={{
+              fontSize: '0.85rem', padding: '2px 5px', lineHeight: 1, border: 'none',
+              background: 'transparent', color: 'var(--bamboo-green)',
+              borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+            }}>
+            📄
+          </button>
         </div>
 
         <ConnectionStatus state={connectionState} />
