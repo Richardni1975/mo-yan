@@ -448,6 +448,14 @@ export function useAudioCall({
     })
   }, [peerUserIds, userId, isEnabled, isVideoEnabled, createOutboundPeer])
 
+  // 视频开启时清理已存在的音频出站 peer（视频 peer 已覆盖音频）
+  useEffect(() => {
+    if (isVideoEnabled && outboundPeersRef.current.size > 0) {
+      console.log('[audio] 视频已开启，清理残留音频出站 peer:', outboundPeersRef.current.size)
+      destroyOutboundPeers()
+    }
+  }, [isVideoEnabled, destroyOutboundPeers])
+
   // ===== Message handling =====
 
   const handleMessage = useCallback((msg: RoomMessage) => {
@@ -542,9 +550,8 @@ export function useAudioCall({
               inboundPeersRef.current.get(msg.senderId)?.signal(signal)
             } catch { /* ignore */ }
           } else {
-            // answer 或 ICE candidate: 视频开启时跳过出站（视频 peer 已处理）
-            // 但入站 ICE candidate 仍需处理
-            let peer = isVideoEnabled ? null : outboundPeersRef.current.get(msg.senderId)
+            // answer 或 ICE candidate
+            let peer = outboundPeersRef.current.get(msg.senderId)
             if (peer) {
               try { peer.signal(signal) } catch { /* ignore */ }
             } else {
