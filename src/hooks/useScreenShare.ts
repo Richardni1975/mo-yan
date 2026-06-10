@@ -12,6 +12,7 @@ import {
   DIRTY_RECT_THRESHOLD,
   BANDWIDTH_DOWNGRADE_THRESHOLD,
   BANDWIDTH_DOWNGRADE_SECONDS,
+  ICE_SERVERS,
 } from '../utils/constants'
 import type { ConnectionState, RoomMessage, ShareMode, SignalMessage, ScreenshotMessage } from '../utils/types'
 
@@ -93,12 +94,7 @@ export function useScreenShare({
       initiator: true,
       stream: screenStreamRef.current,
       trickle: true,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
+      config: { iceServers: ICE_SERVERS },
     })
 
     peer.on('signal', (signal) => {
@@ -548,12 +544,7 @@ export function useScreenShare({
     const peer = new SimplePeer({
       initiator: false,
       trickle: true,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
+      config: { iceServers: ICE_SERVERS },
     })
 
     peer.on('signal', (signal) => {

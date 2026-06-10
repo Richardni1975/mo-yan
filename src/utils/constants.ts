@@ -1,3 +1,17 @@
+/** 共享 ICE 服务器配置（STUN + TURN 中继） */
+export const ICE_SERVERS: RTCIceServer[] = [
+  // Google STUN（NAT 打洞）
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  { urls: ['stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302'] },
+  { urls: ['stun:stun4.l.google.com:19302'] },
+  // 免费 TURN 中继（跨对称 NAT 时使用）
+  {
+    urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443'],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+]
+
 /** 房间最大参与者数量 */
 export const MAX_PARTICIPANTS = 20
 

@@ -7,6 +7,7 @@ import {
   AUDIO_VAD_INTERVAL,
   AUDIO_VAD_IDLE_MS,
   MESSAGE_TYPES,
+  ICE_SERVERS,
 } from '../utils/constants'
 import type { AudioUser, RoomMessage } from '../utils/types'
 
@@ -208,12 +209,7 @@ export function useAudioCall({
       initiator: true,
       stream: localStreamRef.current,
       trickle: true,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
+      config: { iceServers: ICE_SERVERS },
     })
 
     peer.on('signal', (signal) => {
@@ -251,12 +247,7 @@ export function useAudioCall({
     const peer = new SimplePeer({
       initiator: false,
       trickle: true,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
+      config: { iceServers: ICE_SERVERS },
     })
 
     peer.on('signal', (signal) => {

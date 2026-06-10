@@ -8,6 +8,7 @@ import {
   VIDEO_CAMERA_HEIGHT,
   VIDEO_CAMERA_FPS,
   VIDEO_MAX_PARTICIPANTS,
+  ICE_SERVERS,
 } from '../utils/constants'
 import type { RoomMessage } from '../utils/types'
 
@@ -51,6 +52,7 @@ export function useVideoCall({
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map())
   const peerUserIdsRef = useRef<string[]>([])
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const peerCreatedAtRef = useRef<Map<string, number>>(new Map()) // 记录每个 peer 创建时间，防止风暴
 
   // 保持 peerUserIds 引用最新，避免 startVideo / handleMessage 中的闭包过期
   useEffect(() => {
@@ -90,19 +92,17 @@ export function useVideoCall({
       initiator: true,
       stream: localStreamRef.current,
       trickle: true,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
+      config: { iceServers: ICE_SERVERS },
     })
 
     peer.on('signal', (signal) => {
       if (signal.type === 'offer') { console.log(`[WebRTC-Debug][outbound-${targetId}] createOffer`); pushDebugLog(`[outbound-${targetId}] createOffer`) }
       if (signal.type === 'candidate') {
-        console.log(`[WebRTC-Debug][outbound-${targetId}] onicecandidate candidateType=${signal.candidate?.type ?? '?'} sdpMid=${signal.candidate?.sdpMid ?? '?'}`)
-        pushDebugLog(`[outbound-${targetId}] onicecandidate type=${signal.candidate?.type ?? '?'}`)
+        const cType = signal.candidate?.candidate?.includes('typ host') ? 'host' :
+          signal.candidate?.candidate?.includes('typ srflx') ? 'srflx' :
+          signal.candidate?.candidate?.includes('typ relay') ? 'relay' : signal.candidate?.type ?? 'end'
+        console.log(`[WebRTC-Debug][outbound-${targetId}] onicecandidate candidateType=${cType}`)
+        pushDebugLog(`[outbound-${targetId}] onicecandidate type=${cType}`)
       }
       console.log(`[video] outbound to ${targetId} signal:`, signal.type)
       broadcast({
@@ -137,16 +137,21 @@ export function useVideoCall({
     outboundPeersRef.current.clear()
   }, [])
 
-  // 补齐遗漏的出站 peer（应对 presence 同步慢导致 startVideo 时 participant 列表不全）
+  // 补齐遗漏的出站 peer（应对 presence 同步慢，带 10s 冷却防止风暴）
   // 注意：必须放在 hasVideoSlot 和 createOutboundPeer 之后，避免 TDZ 错误
   const ensureOutboundPeers = useCallback(() => {
     if (!localStreamRef.current) return
     if (!hasVideoSlot()) return
+    const now = Date.now()
     peerUserIdsRef.current.forEach((id) => {
       if (id === userId) return
       const existing = outboundPeersRef.current.get(id)
       if (!existing || existing.destroyed) {
+        // 10 秒内不重复创建同一个 peer，防止 ICE 失败时的连接风暴
+        const lastCreated = peerCreatedAtRef.current.get(id) ?? 0
+        if (now - lastCreated < 10000) return
         if (existing?.destroyed) outboundPeersRef.current.delete(id)
+        peerCreatedAtRef.current.set(id, now)
         createOutboundPeer(id)
       }
     })
@@ -161,19 +166,17 @@ export function useVideoCall({
     const peer = new SimplePeer({
       initiator: false,
       trickle: true,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
+      config: { iceServers: ICE_SERVERS },
     })
 
     peer.on('signal', (signal) => {
       if (signal.type === 'answer') { console.log(`[WebRTC-Debug][inbound-${remoteId}] createAnswer`); pushDebugLog(`[inbound-${remoteId}] createAnswer`) }
       if (signal.type === 'candidate') {
-        console.log(`[WebRTC-Debug][inbound-${remoteId}] onicecandidate candidateType=${signal.candidate?.type ?? '?'} sdpMid=${signal.candidate?.sdpMid ?? '?'}`)
-        pushDebugLog(`[inbound-${remoteId}] onicecandidate type=${signal.candidate?.type ?? '?'}`)
+        const cType = signal.candidate?.candidate?.includes('typ host') ? 'host' :
+          signal.candidate?.candidate?.includes('typ srflx') ? 'srflx' :
+          signal.candidate?.candidate?.includes('typ relay') ? 'relay' : signal.candidate?.type ?? 'end'
+        console.log(`[WebRTC-Debug][inbound-${remoteId}] onicecandidate candidateType=${cType}`)
+        pushDebugLog(`[inbound-${remoteId}] onicecandidate type=${cType}`)
       }
       console.log(`[video] inbound from ${remoteId} signal:`, signal.type)
       broadcast({
@@ -314,6 +317,7 @@ export function useVideoCall({
     // 销毁所有 peer
     destroyOutboundPeers()
     destroyInboundPeers()
+    peerCreatedAtRef.current.clear()
 
     // 清除远端流
     remoteStreamsRef.current.forEach((_, uid) => removeRemoteStream(uid))
@@ -454,6 +458,7 @@ export function useVideoCall({
       }
       destroyOutboundPeers()
       destroyInboundPeers()
+      peerCreatedAtRef.current.clear()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
