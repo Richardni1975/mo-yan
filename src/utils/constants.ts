@@ -1,10 +1,12 @@
-/** 共享 ICE 服务器配置（STUN + TURN 中继） */
+/** 共享 ICE 服务器配置（多源 STUN + TURN 中继，确保全球可达） */
 export const ICE_SERVERS: RTCIceServer[] = [
-  // Google STUN（NAT 打洞）
+  // STUN — Google 系
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-  { urls: ['stun:stun2.l.google.com:19302', 'stun:stun3.l.google.com:19302'] },
-  { urls: ['stun:stun4.l.google.com:19302'] },
-  // 免费 TURN 中继 #1 — TCP 端口，防火墙友好
+  // STUN — 非 Google 系（防止封锁）
+  { urls: ['stun:stun.voipbuster.com:3478', 'stun:stun.voipgate.com:3478'] },
+  { urls: ['stun:stun.ekiga.net:3478', 'stun:stun.nextcloud.com:3478'] },
+  { urls: ['stun:stun.freeswitch.org:3478', 'stun:stun.sipgate.net:10000'] },
+  // TURN — TCP/443 + TLS（防火墙穿透能力最强）
   {
     urls: [
       'turn:openrelay.metered.ca:443?transport=tcp',
@@ -13,7 +15,7 @@ export const ICE_SERVERS: RTCIceServer[] = [
     username: 'openrelayproject',
     credential: 'openrelayproject',
   },
-  // 免费 TURN 中继 #2 — UDP 端口
+  // TURN — UDP 备用
   {
     urls: [
       'turn:openrelay.metered.ca:80?transport=udp',
